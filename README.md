@@ -1,37 +1,93 @@
-# 🎓 Student Expense Tracker
+# 🎓 Student Expense Tracker (Centralized PostgreSQL)
 
-A clean, minimal, and beautifully designed expense tracker built for students — powered by pure **HTML5**, **CSS3**, and **JavaScript** with optional **Firebase Authentication & Real-Time Cloud Sync**. No backend server needed. Just elegance.
+A clean, minimal, and beautifully designed expense tracker built for students with **Centralized PostgreSQL Storage & Real-Time Cross-Device Sync**. Powered by Node.js, Express, PostgreSQL, HTML5, CSS3, and JavaScript.
 
 ![HTML5](https://img.shields.io/badge/HTML5-E34F26?style=flat&logo=html5&logoColor=white)
 ![CSS3](https://img.shields.io/badge/CSS3-1572B6?style=flat&logo=css3&logoColor=white)
 ![JavaScript](https://img.shields.io/badge/JavaScript-F7DF1E?style=flat&logo=javascript&logoColor=black)
-![Firebase](https://img.shields.io/badge/Firebase-FFCA28?style=flat&logo=firebase&logoColor=black)
-![License](https://img.shields.io/badge/License-MIT-green.svg)
+![Node.js](https://img.shields.io/badge/Node.js-339933?style=flat&logo=nodedotjs&logoColor=white)
+![PostgreSQL](https://img.shields.io/badge/PostgreSQL-4169E1?style=flat&logo=postgresql&logoColor=white)
+![Supabase](https://img.shields.io/badge/Supabase-3ECF8E?style=flat&logo=supabase&logoColor=white)
 
 ---
 
 ## ✨ Features
 
-- **🔐 User Login & Accounts** — Sign In with Email/Password or 1-Click Google Sign-In
-- **📱 Real-Time Cross-Device Sync** — Add an expense on your phone and watch it update live on your laptop screen!
-- **📦 Offline & Guest Mode** — Works out-of-the-box even without logging in or without internet via `localStorage`
-- **Track Income & Expenses** — Add transactions with description, amount, date, and category
-- **Monthly Budget** — Set a budget and visualize spending with an animated progress bar
-- **Dashboard Summary** — View total income and expenses, plus the current month's remaining budget
-- **Category Breakdown** — Visual bar chart of expenses by category
-- **Filter & Search** — Search by description, filter by type/category, sort by date or amount
-- **14 Built-in Categories** — Food, Transport, Books, Rent, Freelance, Scholarship & more
-- **Fully Responsive** — Optimized thumb-friendly UI for iPhone, Android, tablets, and desktop
-- **No Build Tools** — Runs directly in any browser with zero node_modules or dependencies
+- **🐘 Centralized PostgreSQL Logs** — All transactions are recorded in a central PostgreSQL database. Any phone or laptop sees the shared log of expenses live!
+- **👤 Author Tracking** — Each expense logs the user who created it (e.g. `🍕 Food · 26 Oct · 👤 Alex`).
+- **⚡ Real-Time Cross-Device Sync** — Built with Server-Sent Events (SSE). Add an expense on your phone and watch it update live on your laptop instantly!
+- **🔐 User Accounts & Login** — Secure JWT authentication with bcrypt password hashing.
+- **📱 One-Tap Mobile Access** — Works seamlessly across all phones (iOS Safari & Android Chrome).
+- **Monthly Budget** — Set a budget and visualize spending with an animated progress bar.
+- **Dashboard Summary** — View total income and expenses, plus the current month's remaining budget.
+- **Category Breakdown** — Visual bar chart of expenses by category.
+- **Filter & Search** — Search by description, filter by type/category, sort by date or amount.
 
 ---
 
-## 🎨 Design
+## 🚀 Quick Start
 
-Minimal and modern with an Apple-inspired premium feel:
-- **Font** — Plus Jakarta Sans
-- **Palette** — Clean light surface, deep navy accents, subtle glassmorphism modals
-- **Style** — Clean geometry, subtle shadows, generous whitespace, uppercase micro-labels
+### 1. Start the Server
+```bash
+npm start
+```
+
+You will see:
+```text
+======================================================
+ Student Expense Tracker Backend is Running!
+ Database: Supabase PostgreSQL (Centralized Logs)
+ Laptop access: http://localhost:3000
+ Phone access:  http://<your-local-ip>:3000
+======================================================
+```
+
+### 2. Access on Laptop
+Open **`http://localhost:3000`** in any web browser.
+
+### 3. Access on Phone
+Make sure your phone is connected to the same Wi-Fi as your laptop. Open your phone's browser and go to:
+```text
+http://<your-local-ip>:3000
+```
+*(Tip: In Safari/Chrome, tap **"Add to Home Screen"** to use it like a full-screen mobile app!)*
+
+---
+
+## 🛠 PostgreSQL Database Architecture
+
+The backend automatically connects to the configured Supabase PostgreSQL instance and manages the following schema:
+
+```sql
+-- Registered Users
+CREATE TABLE users (
+  id SERIAL PRIMARY KEY,
+  name VARCHAR(255),
+  email VARCHAR(255) UNIQUE NOT NULL,
+  password_hash VARCHAR(255) NOT NULL,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+-- Centralized Expense Transactions
+CREATE TABLE transactions (
+  id VARCHAR(64) PRIMARY KEY,
+  user_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
+  created_by VARCHAR(255),
+  description VARCHAR(255) NOT NULL,
+  amount NUMERIC(12, 2) NOT NULL,
+  type VARCHAR(32) NOT NULL,
+  category VARCHAR(64) NOT NULL,
+  date VARCHAR(32) NOT NULL,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+-- Global App Settings (Centralized Monthly Budget)
+CREATE TABLE app_settings (
+  key VARCHAR(64) PRIMARY KEY,
+  value JSONB NOT NULL,
+  updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+```
 
 ---
 
@@ -39,81 +95,19 @@ Minimal and modern with an Apple-inspired premium feel:
 
 ```
 student expense/
-├── index.html          → Main HTML layout & modals
-├── style.css           → Responsive styles & design system
-├── script.js           → App logic, auth state & Firestore sync
-├── firebase-config.js  → Firebase project configuration
-└── README.md           → Documentation & setup guide
+├── server.js       → Express API server, PostgreSQL pool & SSE broadcast
+├── script.js       → Client app, auth manager, live sync & rendering
+├── index.html      → Responsive dashboard layout & modals
+├── style.css       → Styling, design system & animations
+├── .env            → PostgreSQL connection string & secrets
+└── package.json    → Dependencies & scripts
 ```
-
----
-
-## 🚀 Getting Started
-
-### 1. Instant Local Use (No Setup Needed)
-Simply double click **`index.html`** or open it with Live Server. You can immediately track expenses in **Guest Mode** (stored in your browser).
-
----
-
-## ☁️ How to Sync Between Phone and Laptop (2-Minute Setup)
-
-To use your account and have your data synced between your phone and laptop:
-
-### Step 1: Create a Free Firebase Project
-1. Go to [Firebase Console](https://console.firebase.google.com/) and click **Add Project**.
-2. Name your project (e.g. `my-student-expenses`) and click Continue.
-
-### Step 2: Enable Authentication
-1. In the Firebase console left menu, click **Build** → **Authentication** → **Get Started**.
-2. Under Sign-in method, enable:
-   - **Email/Password**
-   - **Google** (optional, recommended for 1-click mobile sign in)
-
-### Step 3: Enable Cloud Firestore
-1. In the left menu, click **Build** → **Firestore Database** → **Create database**.
-2. Select **Start in test mode** and choose your nearest region. Click Create.
-
-### Step 4: Add Your Keys to the App
-1. In Project Settings (gear icon at top left), scroll to **Your apps**, click the Web icon (**`</>`**), and register the app.
-2. Copy the `firebaseConfig` object shown on the screen.
-3. Either:
-   - **Paste it directly in the app**: Click the **☁️ Cloud Setup** button in the top navigation bar and paste your config.
-   - **Or edit `firebase-config.js`**: Paste your keys in `firebase-config.js`.
-
----
-
-## 📱 How to Open on Your Phone
-
-Once your Firebase is set up, you can access your tracker on your phone in either of these ways:
-
-1. **GitHub Pages (Recommended & Free forever)**:
-   - Push this repo to GitHub.
-   - Go to your repository **Settings** → **Pages** → Branch: `main` → Save.
-   - Open your GitHub Pages URL on Safari or Chrome on your phone.
-   - (Optional) Tap **"Add to Home Screen"** on your phone to use it like a native mobile app!
-
-2. **Local Wi-Fi Network**:
-   - If using VS Code Live Server or `npx serve`, open `http://<your-laptop-ip>:5500/` on your phone connected to the same Wi-Fi.
-
----
-
-## 🛠 How It Works
-
-| Feature | Implementation |
-|---------|---------------|
-| Cross-Device Sync | Cloud Firestore real-time listener (`onSnapshot`) |
-| User Accounts | Firebase Authentication (Email/Password + Google Sign-In) |
-| Offline Fallback | Firestore offline persistence & browser `localStorage` |
-| Budget Tracker | Progress bar updates dynamically; turns red when over budget |
-| Filtering | Real-time search and multi-filter with sort options |
-| Chart | Pure CSS horizontal bar chart — zero external charting libraries |
-| Responsiveness | Mobile-first CSS flexbox and grid layouts |
 
 ---
 
 ## 🤝 Contributing
 
-Contributions, issues, and feature requests are welcome! Feel free to open an issue or submit a pull request.
+Contributions, issues, and feature requests are welcome!
 
 ## 📝 License
 

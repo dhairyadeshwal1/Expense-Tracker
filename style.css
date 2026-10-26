@@ -1050,3 +1050,32 @@ footer {
     max-height: 94vh;
   }
 }
+
+
+/* ───────── Centralized Author Badge ───────── */
+.txn-author {
+  display: inline-flex;
+  align-items: center;
+  background: rgba(0, 113, 227, 0.08);
+  color: var(--blue);
+  padding: 0.12rem 0.45rem;
+  border-radius: 4px;
+  font-size: 0.74rem;
+  font-weight: 500;
+  margin-left: 0.25rem;
+}
+
+
+/* ───────── Centralized Author Badge ───────── */
+.txn-author {
+  display: inline-flex;
+  align-items: center;
+  background: rgba(0, 113, 227, 0.08);
+  color: var(--blue);
+  padding: 0.12rem 0.45rem;
+  border-radius: 4px;
+  font-size: 0.74rem;
+  font-weight: 500;
+  margin-left: 0.25rem;
+}
+

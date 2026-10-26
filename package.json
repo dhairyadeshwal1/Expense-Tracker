@@ -1,0 +1,18 @@
+{
+  "name": "expense-tracker",
+  "version": "1.0.0",
+  "description": "Student Expense Tracker with Centralized PostgreSQL Cloud Sync",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node server.js"
+  },
+  "dependencies": {
+    "bcryptjs": "^3.0.3",
+    "cors": "^2.8.6",
+    "dotenv": "^17.4.3",
+    "express": "^5.2.1",
+    "jsonwebtoken": "^9.0.3",
+    "pg": "^8.19.0"
+  }
+}

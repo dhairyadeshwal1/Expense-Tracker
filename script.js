@@ -1,19 +1,24 @@
-// ─── State & Storage ─────────────────────────────────────
-const STATE_KEY = "studentExpenseTracker";
+// ─── Centralized PostgreSQL Client ───────────────────────
+const STATE_KEY = "studentExpenseTracker_cache";
+const TOKEN_KEY = "studentExpenseTracker_token";
 
-function loadLocalState() {
+let state = loadLocalCache();
+let currentUser = null;
+let sseConnection = null;
+
+function loadLocalCache() {
   const raw = localStorage.getItem(STATE_KEY);
   return raw ? JSON.parse(raw) : { transactions: [], budget: 0 };
 }
 
-function saveLocalState(newState) {
-  localStorage.setItem(STATE_KEY, JSON.stringify(newState));
+function saveLocalCache(data) {
+  localStorage.setItem(STATE_KEY, JSON.stringify(data));
 }
 
-let state = loadLocalState();
-let currentUser = null;
-let unsubscribeFirestore = null;
-let isFirebaseActive = false;
+function getAuthHeader() {
+  const token = localStorage.getItem(TOKEN_KEY);
+  return token ? { Authorization: `Bearer ${token}` } : {};
+}
 
 // ─── DOM References ─────────────────────────────────────
 const form = document.getElementById("transactionForm");
@@ -46,9 +51,8 @@ const footerStorageNote = document.getElementById("footerStorageNote");
 // Cloud & Auth DOM
 const syncBadge = document.getElementById("syncBadge");
 const syncText = document.getElementById("syncText");
-const cloudSettingsBtn = document.getElementById("cloudSettingsBtn");
+const phoneGuideBtn = document.getElementById("phoneGuideBtn");
 const userChipArea = document.getElementById("userChipArea");
-const openAuthBtn = document.getElementById("openAuthBtn");
 
 // Auth Modal DOM
 const authModal = document.getElementById("authModal");
@@ -58,41 +62,27 @@ const authModalSubtitle = document.getElementById("authModalSubtitle");
 const tabSignIn = document.getElementById("tabSignIn");
 const tabSignUp = document.getElementById("tabSignUp");
 const authForm = document.getElementById("authForm");
+const nameGroup = document.getElementById("nameGroup");
+const authName = document.getElementById("authName");
 const authEmail = document.getElementById("authEmail");
 const authPassword = document.getElementById("authPassword");
 const togglePasswordBtn = document.getElementById("togglePasswordBtn");
 const passwordHint = document.getElementById("passwordHint");
 const authSubmitBtn = document.getElementById("authSubmitBtn");
-const googleSignInBtn = document.getElementById("googleSignInBtn");
 const guestModeBtn = document.getElementById("guestModeBtn");
 const authAlert = document.getElementById("authAlert");
 
-// Cloud Setup Modal DOM
-const cloudModal = document.getElementById("cloudModal");
-const closeCloudModal = document.getElementById("closeCloudModal");
-const firebaseConfigInput = document.getElementById("firebaseConfigInput");
-const saveCloudConfigBtn = document.getElementById("saveCloudConfigBtn");
-const resetCloudConfigBtn = document.getElementById("resetCloudConfigBtn");
-const cloudConfigStatus = document.getElementById("cloudConfigStatus");
+// Phone Guide Modal DOM
+const phoneModal = document.getElementById("phoneModal");
+const closePhoneModal = document.getElementById("closePhoneModal");
+const mobileUrlDisplay = document.getElementById("mobileUrlDisplay");
+const copyPhoneUrlBtn = document.getElementById("copyPhoneUrlBtn");
 
 // Toast
 const toastEl = document.getElementById("toast");
+let authMode = "signin";
 
-let authMode = "signin"; // "signin" | "signup"
-
-// ─── Toast Helper ───────────────────────────────────────
-let toastTimer = null;
-function showToast(message) {
-  if (!toastEl) return;
-  toastEl.textContent = message;
-  toastEl.classList.remove("hidden");
-  clearTimeout(toastTimer);
-  toastTimer = setTimeout(() => {
-    toastEl.classList.add("hidden");
-  }, 3200);
-}
-
-// ─── Format Currency & Helpers ──────────────────────────
+// ─── Helpers ────────────────────────────────────────────
 function formatCurrency(n) {
   return "₹" + Number(n).toLocaleString("en-IN", {
     minimumFractionDigits: 0,
@@ -104,104 +94,124 @@ function generateId() {
   return Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
 }
 
-// Set today as default date
+function formatDate(dateStr) {
+  const d = new Date(dateStr + "T00:00:00");
+  return d.toLocaleDateString("en-IN", {
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+  });
+}
+
+function escapeHtml(str) {
+  const div = document.createElement("div");
+  div.textContent = str || "";
+  return div.innerHTML;
+}
+
+let toastTimer = null;
+function showToast(message) {
+  if (!toastEl) return;
+  toastEl.textContent = message;
+  toastEl.classList.remove("hidden");
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => {
+    toastEl.classList.add("hidden");
+  }, 3000);
+}
+
 if (dateInput) {
   dateInput.value = new Date().toISOString().slice(0, 10);
 }
 
-// ─── Firebase Initialization ────────────────────────────
-let auth = null;
-let db = null;
-
-function initFirebase() {
-  try {
-    if (typeof firebase === "undefined") {
-      console.warn("Firebase SDK script not loaded.");
-      updateSyncStatus("guest", "Offline Mode");
-      return;
-    }
-
-    const config = typeof getFirebaseConfig === "function" ? getFirebaseConfig() : null;
-
-    if (!config || !config.apiKey || config.apiKey === "YOUR_API_KEY" || !config.projectId) {
-      updateSyncStatus("guest", "Local Only (Click Cloud Setup to Sync)");
-      if (footerStorageNote) {
-        footerStorageNote.textContent = "Data saved in local browser (offline)";
-      }
-      return;
-    }
-
-    // Initialize or get app
-    let app;
-    if (!firebase.apps.length) {
-      app = firebase.initializeApp(config);
-    } else {
-      app = firebase.app();
-    }
-
-    auth = firebase.auth();
-    db = firebase.firestore();
-
-    // Enable offline persistence in Firestore
-    db.enablePersistence({ synchronizeTabs: true }).catch((err) => {
-      console.log("Firestore offline persistence:", err.code);
-    });
-
-    isFirebaseActive = true;
-    updateSyncStatus("synced", "Cloud Ready");
-
-    // Listen for Auth changes
-    auth.onAuthStateChanged(handleAuthStateChanged);
-  } catch (error) {
-    console.error("Firebase init failed:", error);
-    updateSyncStatus("error", "Cloud Init Error");
-  }
-}
-
-// ─── Sync Status Indicator ──────────────────────────────
+// ─── Sync Status ────────────────────────────────────────
 function updateSyncStatus(status, text) {
   if (!syncBadge || !syncText) return;
   syncBadge.className = `sync-badge ${status}`;
   syncText.textContent = text || status;
 }
 
-// ─── Auth State Handler ─────────────────────────────────
-function handleAuthStateChanged(user) {
-  currentUser = user;
+// ─── Fetch Centralized PostgreSQL Data ───────────────────
+async function fetchCentralizedData(silent = false) {
+  if (!silent) updateSyncStatus("syncing", "Syncing with PostgreSQL...");
 
-  if (user) {
-    // User is logged in
-    renderUserChip(user);
-    if (footerStorageNote) {
-      footerStorageNote.textContent = `Synced with cloud account (${user.email || "Google Account"})`;
-    }
-    closeAuthModalFn();
+  try {
+    const res = await fetch("/api/data");
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
 
-    // Start listening to the user's Firestore document
-    subscribeToUserData(user.uid);
-  } else {
-    // User is logged out
-    renderLoggedOutChip();
-    if (unsubscribeFirestore) {
-      unsubscribeFirestore();
-      unsubscribeFirestore = null;
-    }
-    if (footerStorageNote) {
-      footerStorageNote.textContent = "Data saved in local browser";
-    }
-    updateSyncStatus("guest", "Guest Mode");
-    state = loadLocalState();
+    const data = await res.json();
+    state = {
+      transactions: Array.isArray(data.transactions) ? data.transactions : [],
+      budget: typeof data.budget === "number" ? data.budget : 0,
+    };
+    saveLocalCache(state);
     renderAll();
+    updateSyncStatus("synced", "🐘 Centralized PostgreSQL Synced");
+  } catch (err) {
+    console.warn("Could not reach PostgreSQL backend:", err);
+    updateSyncStatus("error", "Database Disconnected (Using Local Cache)");
   }
 }
 
-// ─── User Chip Render ───────────────────────────────────
+// ─── Server-Sent Events (Live Cross-Device Sync) ─────────
+function setupSSE() {
+  if (typeof EventSource === "undefined") return;
+
+  if (sseConnection) {
+    sseConnection.close();
+  }
+
+  sseConnection = new EventSource("/api/events");
+
+  sseConnection.onmessage = (e) => {
+    try {
+      const msg = JSON.parse(e.data);
+      if (msg && msg.event) {
+        fetchCentralizedData(true);
+      }
+    } catch (err) {
+      // heartbeat
+    }
+  };
+}
+
+// ─── Check Current Auth User ────────────────────────────
+async function checkAuth() {
+  const token = localStorage.getItem(TOKEN_KEY);
+  if (!token) {
+    renderLoggedOutChip();
+    return;
+  }
+
+  try {
+    const res = await fetch("/api/auth/me", {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+
+    if (res.ok) {
+      const data = await res.json();
+      currentUser = data.user;
+      renderUserChip(currentUser);
+      if (footerStorageNote) {
+        footerStorageNote.textContent = `Logged in as ${currentUser.name || currentUser.email} · Centralized PostgreSQL`;
+      }
+    } else {
+      localStorage.removeItem(TOKEN_KEY);
+      currentUser = null;
+      renderLoggedOutChip();
+    }
+  } catch (err) {
+    console.error("Auth check failed:", err);
+    renderLoggedOutChip();
+  }
+}
+
 function renderUserChip(user) {
-  const displayName = user.displayName || user.email || "Student";
+  const displayName = user.name || user.email.split("@")[0] || "User";
   const initial = displayName.charAt(0).toUpperCase();
 
   userChipArea.innerHTML = `
-    <div class="user-chip" title="${displayName}">
+    <div class="user-chip" title="${escapeHtml(user.email)}">
       <div class="user-avatar">${initial}</div>
       <span class="user-name">${escapeHtml(displayName)}</span>
       <button id="logoutBtn" class="btn-logout" title="Sign out">Log out</button>
@@ -209,87 +219,21 @@ function renderUserChip(user) {
   `;
 
   document.getElementById("logoutBtn").addEventListener("click", () => {
-    if (auth) {
-      auth.signOut().then(() => {
-        showToast("Signed out successfully");
-      });
+    localStorage.removeItem(TOKEN_KEY);
+    currentUser = null;
+    renderLoggedOutChip();
+    showToast("Logged out");
+    if (footerStorageNote) {
+      footerStorageNote.textContent = "Centralized PostgreSQL Storage";
     }
   });
 }
 
 function renderLoggedOutChip() {
   userChipArea.innerHTML = `
-    <button id="openAuthBtn" class="btn btn-login btn-sm">🔑 Sign In / Register</button>
+    <button id="openAuthBtn" class="btn btn-login btn-sm">🔑 Sign In</button>
   `;
   document.getElementById("openAuthBtn").addEventListener("click", openAuthModalFn);
-}
-
-// ─── Real-time Firestore Sync ───────────────────────────
-function subscribeToUserData(uid) {
-  if (!db) return;
-  updateSyncStatus("syncing", "Connecting...");
-
-  const userDocRef = db.collection("users").doc(uid);
-
-  if (unsubscribeFirestore) {
-    unsubscribeFirestore();
-  }
-
-  unsubscribeFirestore = userDocRef.onSnapshot(
-    (doc) => {
-      if (doc.exists) {
-        const cloudData = doc.data();
-        state = {
-          transactions: Array.isArray(cloudData.transactions) ? cloudData.transactions : [],
-          budget: typeof cloudData.budget === "number" ? cloudData.budget : 0,
-        };
-        saveLocalState(state);
-        renderAll();
-        updateSyncStatus("synced", "Synced with Phone & Laptop");
-      } else {
-        // First login: Migrate local storage data into cloud account
-        const localData = loadLocalState();
-        if (localData.transactions && localData.transactions.length > 0) {
-          saveState(localData);
-          showToast(`Migrated ${localData.transactions.length} local transactions to your cloud account!`);
-        } else {
-          saveState(state);
-        }
-      }
-    },
-    (err) => {
-      console.error("Firestore sync error:", err);
-      updateSyncStatus("error", "Sync Error");
-    }
-  );
-}
-
-// ─── Unified State Persistence ──────────────────────────
-function saveState(newState) {
-  state = newState;
-  saveLocalState(state);
-
-  if (currentUser && db && isFirebaseActive) {
-    updateSyncStatus("syncing", "Syncing to cloud...");
-    db.collection("users")
-      .doc(currentUser.uid)
-      .set(
-        {
-          transactions: state.transactions,
-          budget: state.budget,
-          updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
-        },
-        { merge: true }
-      )
-      .then(() => {
-        updateSyncStatus("synced", "Synced");
-      })
-      .catch((err) => {
-        console.error("Error writing to cloud:", err);
-        updateSyncStatus("error", "Cloud Save Failed");
-        showToast("Cloud sync failed. Data saved locally.");
-      });
-  }
 }
 
 // ─── Compute Totals ─────────────────────────────────────
@@ -297,8 +241,8 @@ function computeTotals() {
   let income = 0;
   let expense = 0;
   state.transactions.forEach((t) => {
-    if (t.type === "income") income += t.amount;
-    else expense += t.amount;
+    if (t.type === "income") income += Number(t.amount);
+    else expense += Number(t.amount);
   });
   return { income, expense };
 }
@@ -312,7 +256,7 @@ function computeMonthlyExpenses() {
       date.getFullYear() === now.getFullYear() &&
       date.getMonth() === now.getMonth()
     ) {
-      return total + transaction.amount;
+      return total + Number(transaction.amount);
     }
     return total;
   }, 0);
@@ -364,7 +308,7 @@ function renderChart() {
   const catTotals = {};
   state.transactions.forEach((t) => {
     if (t.type === "expense") {
-      catTotals[t.category] = (catTotals[t.category] || 0) + t.amount;
+      catTotals[t.category] = (catTotals[t.category] || 0) + Number(t.amount);
     }
   });
 
@@ -419,23 +363,23 @@ function getFilteredTransactions() {
       list.sort((a, b) => new Date(b.date) - new Date(a.date));
       break;
     case "highest":
-      list.sort((a, b) => b.amount - a.amount);
+      list.sort((a, b) => Number(b.amount) - Number(a.amount));
       break;
     case "lowest":
-      list.sort((a, b) => a.amount - b.amount);
+      list.sort((a, b) => Number(a.amount) - Number(b.amount));
       break;
   }
 
   return list;
 }
 
-// ─── Render Transaction List ────────────────────────────
+// ─── Render Transaction List (Centralized Logs) ─────────
 function renderTransactions(animate = false) {
   const list = getFilteredTransactions();
 
   if (list.length === 0) {
     transactionList.innerHTML =
-      '<li class="empty-msg">No transactions match your filters.</li>';
+      '<li class="empty-msg">No transactions in centralized logs yet. Add one above!</li>';
     return;
   }
 
@@ -445,7 +389,10 @@ function renderTransactions(animate = false) {
       <li class="${animate && i === 0 ? "animate-in" : ""}">
         <div class="txn-left">
           <span class="txn-desc">${escapeHtml(t.description)}</span>
-          <span class="txn-meta">${t.category} · ${formatDate(t.date)}</span>
+          <span class="txn-meta">
+            ${escapeHtml(t.category)} · ${formatDate(t.date)}
+            ${t.created_by ? `· <span class="txn-author">👤 ${escapeHtml(t.created_by)}</span>` : ""}
+          </span>
         </div>
         <div class="txn-right">
           <span class="txn-amount ${t.type}">
@@ -458,23 +405,8 @@ function renderTransactions(animate = false) {
     .join("");
 }
 
-function formatDate(dateStr) {
-  const d = new Date(dateStr + "T00:00:00");
-  return d.toLocaleDateString("en-IN", {
-    day: "numeric",
-    month: "short",
-    year: "numeric",
-  });
-}
-
-function escapeHtml(str) {
-  const div = document.createElement("div");
-  div.textContent = str;
-  return div.innerHTML;
-}
-
 // ─── Add Transaction ────────────────────────────────────
-form.addEventListener("submit", (e) => {
+form.addEventListener("submit", async (e) => {
   e.preventDefault();
 
   const txn = {
@@ -486,47 +418,93 @@ form.addEventListener("submit", (e) => {
     date: dateInput.value,
   };
 
-  state.transactions.unshift(txn);
-  saveState(state);
+  state.transactions.unshift({
+    ...txn,
+    created_by: currentUser ? (currentUser.name || currentUser.email) : "Shared User",
+  });
+  renderAll(true);
 
   form.reset();
   dateInput.value = new Date().toISOString().slice(0, 10);
 
-  renderAll(true);
-  showToast("Transaction added!");
+  try {
+    const res = await fetch("/api/transactions", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        ...getAuthHeader(),
+      },
+      body: JSON.stringify(txn),
+    });
+
+    if (!res.ok) throw new Error("Failed to save to PostgreSQL");
+    showToast("Saved to Centralized PostgreSQL!");
+  } catch (err) {
+    console.error("Save error:", err);
+    showToast("Error saving to database. Stored locally.");
+  }
 });
 
 // ─── Delete Transaction ─────────────────────────────────
-transactionList.addEventListener("click", (e) => {
+transactionList.addEventListener("click", async (e) => {
   const btn = e.target.closest(".btn-delete");
   if (!btn) return;
 
   const id = btn.dataset.id;
   state.transactions = state.transactions.filter((t) => t.id !== id);
-  saveState(state);
   renderAll();
-  showToast("Transaction deleted");
+
+  try {
+    await fetch(`/api/transactions/${id}`, {
+      method: "DELETE",
+      headers: getAuthHeader(),
+    });
+    showToast("Transaction deleted from centralized logs");
+  } catch (err) {
+    console.error("Delete error:", err);
+  }
 });
 
 // ─── Clear All ──────────────────────────────────────────
-clearAllBtn.addEventListener("click", () => {
-  if (!confirm("Are you sure you want to delete ALL transactions?")) return;
+clearAllBtn.addEventListener("click", async () => {
+  if (!confirm("Are you sure you want to clear ALL centralized transactions?")) return;
   state.transactions = [];
-  saveState(state);
   renderAll();
-  showToast("All transactions cleared");
+
+  try {
+    await fetch("/api/transactions", {
+      method: "DELETE",
+      headers: getAuthHeader(),
+    });
+    showToast("Centralized logs cleared");
+  } catch (err) {
+    console.error("Clear error:", err);
+  }
 });
 
 // ─── Budget ─────────────────────────────────────────────
-setBudgetBtn.addEventListener("click", () => {
+setBudgetBtn.addEventListener("click", async () => {
   const val = parseFloat(budgetInput.value);
   if (isNaN(val) || val < 0) return;
+
   state.budget = val;
-  saveState(state);
   budgetInput.value = "";
   renderSummary();
   renderBudget();
-  showToast(`Monthly budget set to ${formatCurrency(val)}`);
+
+  try {
+    await fetch("/api/budget", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        ...getAuthHeader(),
+      },
+      body: JSON.stringify({ budget: val }),
+    });
+    showToast(`Centralized budget updated to ${formatCurrency(val)}`);
+  } catch (err) {
+    console.error("Budget save error:", err);
+  }
 });
 
 // ─── Filters ────────────────────────────────────────────
@@ -535,7 +513,7 @@ filterType.addEventListener("change", () => renderTransactions());
 filterCategory.addEventListener("change", () => renderTransactions());
 sortOrder.addEventListener("change", () => renderTransactions());
 
-// ─── Render Everything ──────────────────────────────────
+// ─── Render All ─────────────────────────────────────────
 function renderAll(animateLatest = false) {
   renderSummary();
   renderBudget();
@@ -545,11 +523,6 @@ function renderAll(animateLatest = false) {
 
 // ─── Auth Modal Logic ───────────────────────────────────
 function openAuthModalFn() {
-  if (!isFirebaseActive) {
-    // If Firebase isn't configured yet, prompt Cloud Setup first
-    openCloudModalFn();
-    return;
-  }
   setAuthMode("signin");
   clearAuthAlert();
   authModal.classList.remove("hidden");
@@ -568,15 +541,17 @@ function setAuthMode(mode) {
   if (mode === "signin") {
     tabSignIn.classList.add("active");
     tabSignUp.classList.remove("active");
+    nameGroup.classList.add("hidden");
     authModalTitle.textContent = "Welcome Back";
-    authModalSubtitle.textContent = "Sign in to sync your expenses between phone and laptop";
+    authModalSubtitle.textContent = "Sign in to log expenses with your account name";
     authSubmitBtn.textContent = "Sign In";
     passwordHint.style.display = "none";
   } else {
     tabSignUp.classList.add("active");
     tabSignIn.classList.remove("active");
+    nameGroup.classList.remove("hidden");
     authModalTitle.textContent = "Create Account";
-    authModalSubtitle.textContent = "Sync expenses seamlessly on both phone and laptop";
+    authModalSubtitle.textContent = "Log centralized expenses with your name attached";
     authSubmitBtn.textContent = "Create Account";
     passwordHint.style.display = "block";
   }
@@ -593,178 +568,87 @@ function clearAuthAlert() {
   authAlert.classList.add("hidden");
 }
 
-function friendlyAuthError(err) {
-  switch (err.code) {
-    case "auth/invalid-email":
-      return "Please enter a valid email address.";
-    case "auth/user-not-found":
-    case "auth/wrong-password":
-    case "auth/invalid-credential":
-      return "Incorrect email or password.";
-    case "auth/email-already-in-use":
-      return "An account with this email already exists. Try signing in.";
-    case "auth/weak-password":
-      return "Password is too weak. Please use at least 6 characters.";
-    case "auth/popup-closed-by-user":
-      return "Sign in popup closed before finishing.";
-    case "auth/network-request-failed":
-      return "Network error. Please check your internet connection.";
-    default:
-      return err.message || "An authentication error occurred.";
-  }
-}
-
-// Tab Switches
 tabSignIn.addEventListener("click", () => setAuthMode("signin"));
 tabSignUp.addEventListener("click", () => setAuthMode("signup"));
-
-// Close buttons
 closeAuthModal.addEventListener("click", closeAuthModalFn);
+
 guestModeBtn.addEventListener("click", () => {
   closeAuthModalFn();
-  showToast("Continuing in Guest Mode (Offline)");
+  showToast("Using Shared / Guest Mode");
 });
 
-// Toggle Password Visibility
 togglePasswordBtn.addEventListener("click", () => {
   const isPw = authPassword.type === "password";
   authPassword.type = isPw ? "text" : "password";
   togglePasswordBtn.textContent = isPw ? "🙈" : "👁";
 });
 
-// Auth Form Submit (Email/Password)
 authForm.addEventListener("submit", async (e) => {
   e.preventDefault();
-  if (!auth) {
-    showAuthAlert("Firebase is not initialized yet. Please check Cloud Setup.");
-    return;
-  }
 
   const email = authEmail.value.trim();
   const password = authPassword.value;
+  const name = authName.value.trim();
 
   authSubmitBtn.disabled = true;
   authSubmitBtn.textContent = "Please wait…";
   clearAuthAlert();
 
+  const endpoint = authMode === "signup" ? "/api/auth/register" : "/api/auth/login";
+  const payload = authMode === "signup" ? { email, password, name } : { email, password };
+
   try {
-    if (authMode === "signup") {
-      await auth.createUserWithEmailAndPassword(email, password);
-      showToast("Account created successfully!");
-    } else {
-      await auth.signInWithEmailAndPassword(email, password);
-      showToast("Signed in successfully!");
+    const res = await fetch(endpoint, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+
+    const data = await res.json();
+    if (!res.ok) {
+      throw new Error(data.error || "Authentication failed");
     }
+
+    localStorage.setItem(TOKEN_KEY, data.token);
+    currentUser = data.user;
+    renderUserChip(currentUser);
+    closeAuthModalFn();
+    showToast(authMode === "signup" ? "Account created!" : "Signed in!");
+    fetchCentralizedData(true);
   } catch (err) {
-    console.error("Auth error:", err);
-    showAuthAlert(friendlyAuthError(err), "error");
+    showAuthAlert(err.message, "error");
   } finally {
     authSubmitBtn.disabled = false;
     authSubmitBtn.textContent = authMode === "signin" ? "Sign In" : "Create Account";
   }
 });
 
-// Google Sign-In
-googleSignInBtn.addEventListener("click", async () => {
-  if (!auth) {
-    showAuthAlert("Firebase is not initialized yet. Please check Cloud Setup.");
-    return;
-  }
-
-  googleSignInBtn.disabled = true;
-  clearAuthAlert();
-
-  const provider = new firebase.auth.GoogleAuthProvider();
-
-  try {
-    await auth.signInWithPopup(provider);
-    showToast("Signed in with Google!");
-  } catch (err) {
-    console.error("Google sign-in error:", err);
-    showAuthAlert(friendlyAuthError(err), "error");
-  } finally {
-    googleSignInBtn.disabled = false;
-  }
-});
-
-// ─── Cloud Setup Modal Logic ────────────────────────────
-function openCloudModalFn() {
-  cloudConfigStatus.classList.add("hidden");
-  const currentConfig = localStorage.getItem("firebase_user_config");
-  if (currentConfig) {
-    firebaseConfigInput.value = currentConfig;
-  } else if (typeof DEFAULT_FIREBASE_CONFIG !== "undefined" && DEFAULT_FIREBASE_CONFIG.apiKey) {
-    firebaseConfigInput.value = JSON.stringify(DEFAULT_FIREBASE_CONFIG, null, 2);
-  }
-  cloudModal.classList.remove("hidden");
+// ─── Phone Guide Modal ──────────────────────────────────
+function openPhoneModalFn() {
+  const port = window.location.port ? `:${window.location.port}` : "";
+  const host = window.location.hostname;
+  const url = `http://${host}${port}`;
+  mobileUrlDisplay.textContent = url;
+  phoneModal.classList.remove("hidden");
 }
 
-function closeCloudModalFn() {
-  cloudModal.classList.add("hidden");
+function closePhoneModalFn() {
+  phoneModal.classList.add("hidden");
 }
 
-cloudSettingsBtn.addEventListener("click", openCloudModalFn);
-closeCloudModal.addEventListener("click", closeCloudModalFn);
+phoneGuideBtn.addEventListener("click", openPhoneModalFn);
+closePhoneModal.addEventListener("click", closePhoneModalFn);
 
-saveCloudConfigBtn.addEventListener("click", () => {
-  const raw = firebaseConfigInput.value.trim();
-  if (!raw) {
-    cloudConfigStatus.textContent = "Please paste your Firebase configuration.";
-    cloudConfigStatus.className = "auth-alert error";
-    cloudConfigStatus.classList.remove("hidden");
-    return;
-  }
-
-  try {
-    let parsed;
-    // Extract JSON or object if user pasted "const firebaseConfig = { ... };"
-    if (raw.includes("{")) {
-      const jsonStart = raw.indexOf("{");
-      const jsonEnd = raw.lastIndexOf("}");
-      const cleaned = raw
-        .slice(jsonStart, jsonEnd + 1)
-        .replace(/(['"])?([a-zA-Z0-9_]+)(['"])?:/g, '"$2":') // Quote unquoted keys
-        .replace(/'/g, '"') // Single to double quotes
-        .replace(/,\s*}/g, "}"); // Remove trailing commas
-      parsed = JSON.parse(cleaned);
-    } else {
-      parsed = JSON.parse(raw);
-    }
-
-    if (!parsed.apiKey || !parsed.projectId) {
-      throw new Error("Missing apiKey or projectId in config.");
-    }
-
-    localStorage.setItem("firebase_user_config", JSON.stringify(parsed, null, 2));
-
-    cloudConfigStatus.textContent = "Configuration saved! Reloading to connect...";
-    cloudConfigStatus.className = "auth-alert success";
-    cloudConfigStatus.classList.remove("hidden");
-
-    setTimeout(() => {
-      window.location.reload();
-    }, 1200);
-  } catch (err) {
-    console.error("Config parse error:", err);
-    cloudConfigStatus.textContent = "Invalid format. Please paste a valid firebaseConfig object.";
-    cloudConfigStatus.className = "auth-alert error";
-    cloudConfigStatus.classList.remove("hidden");
-  }
+copyPhoneUrlBtn.addEventListener("click", () => {
+  const text = mobileUrlDisplay.textContent.trim();
+  navigator.clipboard.writeText(text).then(() => {
+    showToast("Link copied to clipboard!");
+  }).catch(() => {
+    showToast("Please copy the URL manually");
+  });
 });
 
-resetCloudConfigBtn.addEventListener("click", () => {
-  if (confirm("Reset cloud configuration to defaults?")) {
-    localStorage.removeItem("firebase_user_config");
-    firebaseConfigInput.value = "";
-    showToast("Cloud configuration reset");
-    setTimeout(() => {
-      window.location.reload();
-    }, 1000);
-  }
-});
-
-// Close modals on clicking overlay outside card
-[authModal, cloudModal].forEach((overlay) => {
+[authModal, phoneModal].forEach((overlay) => {
   overlay.addEventListener("click", (e) => {
     if (e.target === overlay) {
       overlay.classList.add("hidden");
@@ -772,6 +656,8 @@ resetCloudConfigBtn.addEventListener("click", () => {
   });
 });
 
-// ─── Initial Render & Init ──────────────────────────────
+// ─── Initial Startup ────────────────────────────────────
 renderAll();
-initFirebase();
+fetchCentralizedData();
+setupSSE();
+checkAuth();

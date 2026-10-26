@@ -1,3 +1,153 @@
+// ─── Interactive Light Grey Dot Grid Canvas Background ─────────
+(function initDotGrid() {
+  const canvas = document.getElementById("dotCanvas");
+  if (!canvas) return;
+  const ctx = canvas.getContext("2d");
+  if (!ctx) return;
+
+  const SPACING = 30;       // Equal spacing between dots in X and Y
+  const BASE_RADIUS = 1.75; // Small light grey dot when resting
+  const MAX_RADIUS = 5.6;   // Gets distinctly bigger when hovered
+  const HOVER_DIST = 90;    // Hover interaction radius around cursor
+
+  let width = 0;
+  let height = 0;
+  let dpr = 1;
+  let dots = [];
+
+  const mouse = {
+    x: -9999,
+    y: -9999,
+    active: false,
+  };
+
+  function resize() {
+    dpr = Math.min(window.devicePixelRatio || 1, 2);
+    width = window.innerWidth;
+    height = window.innerHeight;
+    canvas.width = Math.floor(width * dpr);
+    canvas.height = Math.floor(height * dpr);
+    canvas.style.width = width + "px";
+    canvas.style.height = height + "px";
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+
+    createDots();
+    draw();
+  }
+
+  function createDots() {
+    dots = [];
+    const cols = Math.ceil(width / SPACING) + 1;
+    const rows = Math.ceil(height / SPACING) + 1;
+    const startX = (width - (cols - 1) * SPACING) / 2;
+    const startY = (height - (rows - 1) * SPACING) / 2;
+
+    for (let r = 0; r < rows; r++) {
+      for (let c = 0; c < cols; c++) {
+        dots.push({
+          x: Math.round(startX + c * SPACING),
+          y: Math.round(startY + r * SPACING),
+          r: BASE_RADIUS,
+          targetR: BASE_RADIUS,
+        });
+      }
+    }
+  }
+
+  let animId = null;
+  let isRunning = false;
+
+  function loop() {
+    let needsUpdate = false;
+
+    for (let i = 0; i < dots.length; i++) {
+      const dot = dots[i];
+      let targetR = BASE_RADIUS;
+
+      if (mouse.active) {
+        const dx = mouse.x - dot.x;
+        const dy = mouse.y - dot.y;
+        const dist = Math.sqrt(dx * dx + dy * dy);
+
+        if (dist < HOVER_DIST) {
+          const power = 1 - dist / HOVER_DIST;
+          targetR = BASE_RADIUS + (MAX_RADIUS - BASE_RADIUS) * Math.pow(power, 1.8);
+        }
+      }
+
+      dot.targetR = targetR;
+
+      const diff = dot.targetR - dot.r;
+      if (Math.abs(diff) > 0.02) {
+        dot.r += diff * 0.22;
+        needsUpdate = true;
+      } else {
+        dot.r = dot.targetR;
+      }
+    }
+
+    draw();
+
+    if (needsUpdate || mouse.active) {
+      animId = requestAnimationFrame(loop);
+    } else {
+      isRunning = false;
+    }
+  }
+
+  function schedule() {
+    if (!isRunning) {
+      isRunning = true;
+      animId = requestAnimationFrame(loop);
+    }
+  }
+
+  function draw() {
+    ctx.clearRect(0, 0, width, height);
+
+    for (let i = 0; i < dots.length; i++) {
+      const dot = dots[i];
+      const expansion = (dot.r - BASE_RADIUS) / (MAX_RADIUS - BASE_RADIUS);
+
+      // Light grey resting color: rgba(185, 190, 198, 0.45)
+      // When hovered: gets darker and crisper grey: rgba(80, 85, 95, 0.85)
+      const alpha = 0.45 + expansion * 0.4;
+      const gray = Math.round(185 - expansion * 105);
+
+      ctx.beginPath();
+      ctx.arc(dot.x, dot.y, dot.r, 0, Math.PI * 2);
+      ctx.fillStyle = `rgba(${gray}, ${gray}, ${gray + 6}, ${alpha})`;
+      ctx.fill();
+    }
+  }
+
+  window.addEventListener("pointermove", (e) => {
+    mouse.x = e.clientX;
+    mouse.y = e.clientY;
+    mouse.active = true;
+    schedule();
+  });
+
+  window.addEventListener("pointerdown", (e) => {
+    mouse.x = e.clientX;
+    mouse.y = e.clientY;
+    mouse.active = true;
+    schedule();
+  });
+
+  window.addEventListener("pointerleave", () => {
+    mouse.active = false;
+    schedule();
+  });
+
+  window.addEventListener("resize", resize);
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", resize);
+  } else {
+    resize();
+  }
+})();
+
 // ─── Centralized PostgreSQL Client ───────────────────────
 const STATE_KEY = "studentExpenseTracker_cache";
 const TOKEN_KEY = "studentExpenseTracker_token";

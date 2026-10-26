@@ -2,7 +2,6 @@ require("dotenv").config();
 const express = require("express");
 const cors = require("cors");
 const path = require("path");
-const os = require("os");
 const { Pool } = require("pg");
 const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
@@ -321,19 +320,6 @@ app.post("/api/budget", async (req, res) => {
   }
 });
 
-// Helper to find local IPv4 for easy mobile phone access
-function getLocalIp() {
-  const interfaces = os.networkInterfaces();
-  for (const name of Object.keys(interfaces)) {
-    for (const iface of interfaces[name]) {
-      if (iface.family === "IPv4" && !iface.internal) {
-        return iface.address;
-      }
-    }
-  }
-  return "localhost";
-}
-
 // Fallback to index.html
 app.use((req, res) => {
   res.sendFile(path.join(__dirname, "index.html"));
@@ -341,11 +327,6 @@ app.use((req, res) => {
 
 // ─── Start Server ────────────────────────────────────────
 app.listen(PORT, "0.0.0.0", () => {
-  const localIp = getLocalIp();
-  console.log(`\n======================================================`);
-  console.log(` Student Expense Tracker Backend is Running!`);
-  console.log(` Database: Supabase PostgreSQL (Centralized Logs)`);
-  console.log(` Laptop access: http://localhost:${PORT}`);
-  console.log(` Phone access:  http://${localIp}:${PORT}`);
-  console.log(`======================================================\n`);
+  console.log(`Server listening on port ${PORT}`);
+  console.log(`Centralized PostgreSQL Connected: Supabase`);
 });

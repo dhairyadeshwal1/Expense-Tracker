@@ -6,16 +6,16 @@
   <title>Student Expense Tracker</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="style.css" />
 </head>
 <body>
-  <!-- ───────── Top Navigation / Database Bar ───────── -->
+  <!-- ───────── Top Navigation / Telemetry Bar ───────── -->
   <nav class="top-nav">
     <div class="nav-container">
       <div class="nav-brand">
-        <span class="nav-icon">🎓</span>
-        <span class="nav-title">Student Expense Tracker</span>
+        <span class="nav-logo">⚡</span>
+        <span class="nav-title">EXPENSE TRACKER</span>
       </div>
       <div class="nav-actions">
         <div id="syncBadge" class="sync-badge syncing" title="PostgreSQL Database Status">
@@ -23,7 +23,7 @@
           <span id="syncText" class="sync-text">Connecting to PostgreSQL...</span>
         </div>
         <div id="userChipArea" class="user-chip-area">
-          <button id="openAuthBtn" class="btn btn-login btn-sm">🔑 Sign In</button>
+          <button id="openAuthBtn" class="btn btn-login btn-sm">Sign In</button>
         </div>
       </div>
     </div>
@@ -31,8 +31,8 @@
 
   <!-- ───────── Header ───────── -->
   <header>
-    <h1>🎓 Student Expense Tracker</h1>
-    <p class="subtitle">Centralized expense logs &middot; Real-time PostgreSQL sync across all devices</p>
+    <h1>Expense Tracker</h1>
+    <p class="subtitle">Centralized telemetry &middot; Real-time PostgreSQL sync across all devices</p>
   </header>
 
   <main>
@@ -92,22 +92,22 @@
             <label for="category">Category</label>
             <select id="category">
               <optgroup label="Expenses">
-                <option value="Food">🍕 Food</option>
-                <option value="Transport">🚌 Transport</option>
-                <option value="Books">📚 Books & Supplies</option>
-                <option value="Entertainment">🎮 Entertainment</option>
-                <option value="Rent">🏠 Rent</option>
-                <option value="Utilities">💡 Utilities</option>
-                <option value="Shopping">🛒 Shopping</option>
-                <option value="Health">💊 Health</option>
-                <option value="Other">📦 Other</option>
+                <option value="Food">Food</option>
+                <option value="Transport">Transport</option>
+                <option value="Books">Books & Supplies</option>
+                <option value="Entertainment">Entertainment</option>
+                <option value="Rent">Rent</option>
+                <option value="Utilities">Utilities</option>
+                <option value="Shopping">Shopping</option>
+                <option value="Health">Health</option>
+                <option value="Other">Other</option>
               </optgroup>
               <optgroup label="Income">
-                <option value="Allowance">💰 Allowance</option>
-                <option value="Part-time">💼 Part-time Job</option>
-                <option value="Scholarship">🎓 Scholarship</option>
-                <option value="Freelance">💻 Freelance</option>
-                <option value="Gift">🎁 Gift</option>
+                <option value="Allowance">Allowance</option>
+                <option value="Part-time">Part-time Job</option>
+                <option value="Scholarship">Scholarship</option>
+                <option value="Freelance">Freelance</option>
+                <option value="Gift">Gift</option>
               </optgroup>
             </select>
           </div>
@@ -118,7 +118,7 @@
           <input type="date" id="date" required />
         </div>
 
-        <button type="submit" class="btn btn-add">+ Add Transaction</button>
+        <button type="submit" class="btn btn-add">Add Transaction</button>
       </form>
     </section>
 
@@ -134,20 +134,20 @@
         </select>
         <select id="filterCategory">
           <option value="all">All Categories</option>
-          <option value="Food">🍕 Food</option>
-          <option value="Transport">🚌 Transport</option>
-          <option value="Books">📚 Books & Supplies</option>
-          <option value="Entertainment">🎮 Entertainment</option>
-          <option value="Rent">🏠 Rent</option>
-          <option value="Utilities">💡 Utilities</option>
-          <option value="Shopping">🛒 Shopping</option>
-          <option value="Health">💊 Health</option>
-          <option value="Other">📦 Other</option>
-          <option value="Allowance">💰 Allowance</option>
-          <option value="Part-time">💼 Part-time Job</option>
-          <option value="Scholarship">🎓 Scholarship</option>
-          <option value="Freelance">💻 Freelance</option>
-          <option value="Gift">🎁 Gift</option>
+          <option value="Food">Food</option>
+          <option value="Transport">Transport</option>
+          <option value="Books">Books & Supplies</option>
+          <option value="Entertainment">Entertainment</option>
+          <option value="Rent">Rent</option>
+          <option value="Utilities">Utilities</option>
+          <option value="Shopping">Shopping</option>
+          <option value="Health">Health</option>
+          <option value="Other">Other</option>
+          <option value="Allowance">Allowance</option>
+          <option value="Part-time">Part-time Job</option>
+          <option value="Scholarship">Scholarship</option>
+          <option value="Freelance">Freelance</option>
+          <option value="Gift">Gift</option>
         </select>
         <select id="sortOrder">
           <option value="newest">Newest First</option>
@@ -169,8 +169,8 @@
     <!-- ───────── Transaction History ───────── -->
     <section class="card history-card">
       <div class="history-header">
-        <h2>Centralized Transaction History</h2>
-        <button id="clearAllBtn" class="btn btn-danger">🗑 Clear All</button>
+        <h2>Transaction History</h2>
+        <button id="clearAllBtn" class="btn btn-danger">Clear All</button>
       </div>
       <ul id="transactionList" class="transaction-list">
         <li class="empty-msg">No transactions yet. Add one above!</li>
@@ -180,7 +180,7 @@
 
   <!-- ───────── Footer ───────── -->
   <footer>
-    <p>Made with ❤️ for students by Dhairya &middot; <span id="footerStorageNote">Centralized PostgreSQL Storage</span></p>
+    <p>Expense Tracker &middot; <span id="footerStorageNote">Centralized PostgreSQL Storage</span></p>
   </footer>
 
   <!-- ───────── Auth Modal ───────── -->
@@ -189,9 +189,8 @@
       <button class="modal-close" id="closeAuthModal" aria-label="Close">&times;</button>
       
       <div class="auth-header">
-        <div class="auth-icon-badge">🐘</div>
         <h2 id="authModalTitle">Welcome Back</h2>
-        <p class="auth-subtitle" id="authModalSubtitle">Sign in to log expenses with your account name</p>
+        <p class="auth-subtitle" id="authModalSubtitle">Sign in to sync your account telemetry across devices</p>
       </div>
 
       <div class="auth-tabs">
@@ -216,7 +215,7 @@
           <label for="authPassword">Password</label>
           <div class="password-wrapper">
             <input type="password" id="authPassword" placeholder="••••••••" required autocomplete="current-password" minlength="6" />
-            <button type="button" id="togglePasswordBtn" class="btn-toggle-pw" title="Show/Hide Password">👁</button>
+            <button type="button" id="togglePasswordBtn" class="btn-toggle-pw" title="Show/Hide Password">Show</button>
           </div>
           <span class="auth-hint" id="passwordHint" style="display:none;">At least 6 characters</span>
         </div>

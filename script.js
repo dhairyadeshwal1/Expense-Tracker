@@ -273,7 +273,7 @@ function renderUserChip(user) {
 
 function renderLoggedOutChip() {
   userChipArea.innerHTML = `
-    <button id="openAuthBtn" class="btn btn-login btn-sm">🔑 Sign In / Register</button>
+    <button id="openAuthBtn" class="btn btn-login btn-sm">Sign In</button>
   `;
   document.getElementById("openAuthBtn").addEventListener("click", openAuthModalFn);
 }
@@ -338,12 +338,11 @@ function renderBudget() {
   }
 }
 
-// ─── Render Chart ───────────────────────────────────────
+// ─── Render Chart (Tesla Minimalist Tech Palette) ──────
 const BAR_COLORS = [
-  "#6c5ce7", "#00b894", "#e17055", "#0984e3",
-  "#fdcb6e", "#e84393", "#00cec9", "#d63031",
-  "#a29bfe", "#55efc4", "#fab1a0", "#74b9ff",
-  "#ffeaa7", "#fd79a8",
+  "#3e6ae1", "#171a20", "#12bb7b", "#e82127",
+  "#5c5e62", "#0091ff", "#faad14", "#722ed1",
+  "#13c2c2", "#2f54eb", "#8c8c8c", "#10239e",
 ];
 
 function renderChart() {
@@ -433,7 +432,7 @@ function renderTransactions(animate = false) {
           <span class="txn-desc">${escapeHtml(t.description)}</span>
           <span class="txn-meta">
             ${escapeHtml(t.category)} · ${formatDate(t.date)}
-            ${t.created_by ? `· <span class="txn-author">👤 ${escapeHtml(t.created_by)}</span>` : ""}
+            ${t.created_by ? `· <span class="txn-author">${escapeHtml(t.created_by)}</span>` : ""}
           </span>
         </div>
         <div class="txn-right">
@@ -650,7 +649,7 @@ guestModeBtn.addEventListener("click", () => {
 togglePasswordBtn.addEventListener("click", () => {
   const isPw = authPassword.type === "password";
   authPassword.type = isPw ? "text" : "password";
-  togglePasswordBtn.textContent = isPw ? "🙈" : "👁";
+  togglePasswordBtn.textContent = isPw ? "Hide" : "Show";
 });
 
 authForm.addEventListener("submit", async (e) => {

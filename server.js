@@ -1,21 +1,21 @@
-require("dotenv").config();
-const express = require("express");
-const cors = require("cors");
+const http = require("http");
+const fs = require("fs");
 const path = require("path");
 const crypto = require("crypto");
 const { Pool } = require("pg");
-const bcrypt = require("bcryptjs");
 
-const app = express();
 const PORT = process.env.PORT || 3000;
 const JWT_SECRET = process.env.JWT_SECRET || "student_expense_tracker_secret_2026";
+const DB_URL =
+  process.env.DATABASE_URL ||
+  "postgresql://postgres.qmpfbgdcxuinrvpgnxju:expensetracker12312@aws-0-ap-northeast-1.pooler.supabase.com:6543/postgres";
 
-// ─── Native JWT (Zero dependency, ultra-fast) ───────────
+// ─── Native JWT ──────────────────────────────────────────
 function base64Url(str) {
   return Buffer.from(str).toString("base64url");
 }
 
-function signJwt(payload, secret = JWT_SECRET, expiresInDays = 60) {
+function signJwt(payload, expiresInDays = 60) {
   const header = base64Url(JSON.stringify({ alg: "HS256", typ: "JWT" }));
   const expPayload = base64Url(
     JSON.stringify({
@@ -24,41 +24,58 @@ function signJwt(payload, secret = JWT_SECRET, expiresInDays = 60) {
     })
   );
   const signature = crypto
-    .createHmac("sha256", secret)
+    .createHmac("sha256", JWT_SECRET)
     .update(`${header}.${expPayload}`)
     .digest("base64url");
   return `${header}.${expPayload}.${signature}`;
 }
 
-function verifyJwt(token, secret = JWT_SECRET) {
+function verifyJwt(token) {
+  if (!token) return null;
   const parts = token.split(".");
-  if (parts.length !== 3) throw new Error("Invalid token");
+  if (parts.length !== 3) return null;
   const [header, payload, signature] = parts;
-  const expectedSignature = crypto
-    .createHmac("sha256", secret)
+  const expected = crypto
+    .createHmac("sha256", JWT_SECRET)
     .update(`${header}.${payload}`)
     .digest("base64url");
-  if (signature !== expectedSignature) throw new Error("Invalid token signature");
-  const decoded = JSON.parse(Buffer.from(payload, "base64url").toString());
-  if (decoded.exp && decoded.exp < Math.floor(Date.now() / 1000)) {
-    throw new Error("Token expired");
+  if (signature !== expected) return null;
+  try {
+    const decoded = JSON.parse(Buffer.from(payload, "base64url").toString());
+    if (decoded.exp && decoded.exp < Math.floor(Date.now() / 1000)) return null;
+    return decoded;
+  } catch (e) {
+    return null;
   }
-  return decoded;
 }
 
-// ─── Database Connection ─────────────────────────────────
+// ─── Native Password Hashing ─────────────────────────────
+function hashPassword(password) {
+  const salt = crypto.randomBytes(16).toString("hex");
+  const hash = crypto.scryptSync(password, salt, 64).toString("hex");
+  return `scrypt:${salt}:${hash}`;
+}
+
+function verifyPassword(password, stored) {
+  if (!stored) return false;
+  if (stored.startsWith("scrypt:")) {
+    const [, salt, key] = stored.split(":");
+    const hash = crypto.scryptSync(password, salt, 64).toString("hex");
+    return hash === key;
+  }
+  return false;
+}
+
+// ─── PostgreSQL Database ─────────────────────────────────
 const pool = new Pool({
-  connectionString:
-    process.env.DATABASE_URL ||
-    "postgresql://postgres.qmpfbgdcxuinrvpgnxju:expensetracker12312@aws-0-ap-northeast-1.pooler.supabase.com:6543/postgres",
+  connectionString: DB_URL,
   ssl: { rejectUnauthorized: false },
 });
 
 pool.on("error", (err) => {
-  console.error("Unexpected error on idle PostgreSQL client", err);
+  console.error("Database idle client error:", err.message);
 });
 
-// ─── Database Initialization ─────────────────────────────
 async function initDb() {
   try {
     await pool.query(`
@@ -85,82 +102,16 @@ async function initDb() {
         created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
       );
     `);
-    console.log("PostgreSQL database ready.");
+    console.log("PostgreSQL schema ready.");
   } catch (err) {
-    console.error("Error initializing PostgreSQL database:", err.message);
+    console.error("Error setting up database tables:", err.message);
   }
 }
 
-// ─── Middleware ──────────────────────────────────────────
-app.use(cors());
-app.use(express.json());
-app.use(express.static(__dirname));
-
-// Start listening immediately
-app.listen(PORT, "0.0.0.0", () => {
-  console.log(`Server listening on port ${PORT}`);
-  initDb();
-});
-
-// JWT Middleware
-function authMiddleware(req, res, next) {
-  const authHeader = req.headers.authorization;
-  if (authHeader && authHeader.startsWith("Bearer ")) {
-    const token = authHeader.split(" ")[1];
-    try {
-      const decoded = verifyJwt(token);
-      req.user = decoded;
-    } catch (err) {
-      req.user = null;
-    }
-  } else {
-    req.user = null;
-  }
-  next();
-}
-
-function requireAuth(req, res, next) {
-  authMiddleware(req, res, () => {
-    if (!req.user) {
-      return res.status(401).json({ error: "Please sign in to access your data." });
-    }
-    next();
-  });
-}
-
-// ─── Real-Time Sync (Server-Sent Events) ─────────────────
+// ─── Server-Sent Events (SSE) ───────────────────────────
 const sseClients = new Map(); // userId -> Set of res objects
 
-app.get("/api/events", authMiddleware, (req, res) => {
-  res.writeHead(200, {
-    "Content-Type": "text/event-stream",
-    "Cache-Control": "no-cache",
-    Connection: "keep-alive",
-  });
-  res.write("data: connected\n\n");
-
-  const userId = req.user ? req.user.id : "guest";
-  if (!sseClients.has(userId)) {
-    sseClients.set(userId, new Set());
-  }
-  sseClients.get(userId).add(res);
-
-  const heartbeat = setInterval(() => {
-    res.write(": heartbeat\n\n");
-  }, 25000);
-
-  req.on("close", () => {
-    clearInterval(heartbeat);
-    if (sseClients.has(userId)) {
-      sseClients.get(userId).delete(res);
-      if (sseClients.get(userId).size === 0) {
-        sseClients.delete(userId);
-      }
-    }
-  });
-});
-
-function broadcastUserSync(userId) {
+function broadcastSync(userId) {
   if (sseClients.has(userId)) {
     const payload = `data: ${JSON.stringify({ event: "sync", timestamp: Date.now() })}\n\n`;
     for (const client of sseClients.get(userId)) {
@@ -169,264 +120,325 @@ function broadcastUserSync(userId) {
   }
 }
 
-// ─── Authentication Endpoints ───────────────────────────
-
-// Register
-app.post("/api/auth/register", async (req, res) => {
-  const { email, password, name, initialTransactions, initialBudget } = req.body;
-
-  if (!email || !password || password.length < 4) {
-    return res.status(400).json({
-      error: "Please enter a valid email and a password of at least 4 characters.",
+// ─── Request Body Helper ─────────────────────────────────
+function parseBody(req) {
+  return new Promise((resolve) => {
+    let body = "";
+    req.on("data", (chunk) => (body += chunk));
+    req.on("end", () => {
+      try {
+        resolve(JSON.parse(body || "{}"));
+      } catch (e) {
+        resolve({});
+      }
     });
+  });
+}
+
+function sendJson(res, statusCode, data) {
+  res.writeHead(statusCode, {
+    "Content-Type": "application/json",
+    "Access-Control-Allow-Origin": "*",
+    "Access-Control-Allow-Methods": "GET, POST, DELETE, OPTIONS",
+    "Access-Control-Allow-Headers": "Content-Type, Authorization",
+  });
+  res.end(JSON.stringify(data));
+}
+
+function getUserFromReq(req) {
+  const authHeader = req.headers["authorization"] || "";
+  if (authHeader.startsWith("Bearer ")) {
+    return verifyJwt(authHeader.split(" ")[1]);
+  }
+  return null;
+}
+
+// ─── HTTP Server ─────────────────────────────────────────
+const MIME_TYPES = {
+  ".html": "text/html; charset=UTF-8",
+  ".css": "text/css; charset=UTF-8",
+  ".js": "application/javascript; charset=UTF-8",
+  ".json": "application/json; charset=UTF-8",
+  ".png": "image/png",
+  ".jpg": "image/jpeg",
+  ".svg": "image/svg+xml",
+  ".ico": "image/x-icon",
+};
+
+const server = http.createServer(async (req, res) => {
+  // CORS Preflight
+  if (req.method === "OPTIONS") {
+    res.writeHead(204, {
+      "Access-Control-Allow-Origin": "*",
+      "Access-Control-Allow-Methods": "GET, POST, DELETE, OPTIONS",
+      "Access-Control-Allow-Headers": "Content-Type, Authorization",
+    });
+    return res.end();
   }
 
-  const normalizedEmail = email.toLowerCase().trim();
+  const url = new URL(req.url, `http://localhost:${PORT}`);
+  const pathname = url.pathname;
 
-  try {
-    const existing = await pool.query(
-      "SELECT id FROM public.users WHERE email = $1",
-      [normalizedEmail]
-    );
+  // ─── SSE Stream ───
+  if (pathname === "/api/events" && req.method === "GET") {
+    const user = getUserFromReq(req);
+    const userId = user ? user.id : "guest";
 
-    if (existing.rows.length > 0) {
-      return res.status(409).json({
-        error: "An account with this email already exists. Please Sign In.",
-      });
-    }
+    res.writeHead(200, {
+      "Content-Type": "text/event-stream",
+      "Cache-Control": "no-cache",
+      Connection: "keep-alive",
+      "Access-Control-Allow-Origin": "*",
+    });
+    res.write("data: connected\n\n");
 
-    const salt = await bcrypt.genSalt(10);
-    const passwordHash = await bcrypt.hash(password, salt);
-    const displayName = name && name.trim() ? name.trim() : normalizedEmail.split("@")[0];
-    const budgetVal = typeof initialBudget === "number" ? initialBudget : 0;
+    if (!sseClients.has(userId)) sseClients.set(userId, new Set());
+    sseClients.get(userId).add(res);
 
-    const result = await pool.query(
-      `INSERT INTO public.users (name, email, password_hash, budget)
-       VALUES ($1, $2, $3, $4)
-       RETURNING id, name, email, budget, created_at`,
-      [displayName, normalizedEmail, passwordHash, budgetVal]
-    );
+    const hb = setInterval(() => res.write(": heartbeat\n\n"), 25000);
+    req.on("close", () => {
+      clearInterval(hb);
+      if (sseClients.has(userId)) {
+        sseClients.get(userId).delete(res);
+        if (sseClients.get(userId).size === 0) sseClients.delete(userId);
+      }
+    });
+    return;
+  }
 
-    const user = result.rows[0];
+  // ─── API Routes ───
+  if (pathname.startsWith("/api/")) {
+    // Register
+    if (pathname === "/api/auth/register" && req.method === "POST") {
+      const { email, password, name, initialTransactions, initialBudget } = await parseBody(req);
+      if (!email || !password || password.length < 4) {
+        return sendJson(res, 400, { error: "Valid email and password (min 4 chars) required." });
+      }
 
-    // Migrate any initial guest transactions into the new account
-    if (Array.isArray(initialTransactions) && initialTransactions.length > 0) {
-      for (const t of initialTransactions) {
-        if (t.description && t.amount && t.type && t.category && t.date) {
-          const txnId = t.id || Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
-          await pool.query(
-            `INSERT INTO public.transactions (id, user_id, created_by, description, amount, type, category, date)
-             VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-             ON CONFLICT (id) DO NOTHING`,
-            [txnId, user.id, user.name, t.description, t.amount, t.type, t.category, t.date]
-          );
+      const normalizedEmail = email.toLowerCase().trim();
+      try {
+        const existing = await pool.query("SELECT id FROM public.users WHERE email = $1", [
+          normalizedEmail,
+        ]);
+        if (existing.rows.length > 0) {
+          return sendJson(res, 409, { error: "Account with this email already exists. Please Sign In." });
         }
+
+        const passwordHash = hashPassword(password);
+        const displayName = name && name.trim() ? name.trim() : normalizedEmail.split("@")[0];
+        const budgetVal = typeof initialBudget === "number" ? initialBudget : 0;
+
+        const result = await pool.query(
+          `INSERT INTO public.users (name, email, password_hash, budget)
+           VALUES ($1, $2, $3, $4)
+           RETURNING id, name, email, budget, created_at`,
+          [displayName, normalizedEmail, passwordHash, budgetVal]
+        );
+        const user = result.rows[0];
+
+        if (Array.isArray(initialTransactions) && initialTransactions.length > 0) {
+          for (const t of initialTransactions) {
+            if (t.description && t.amount && t.type && t.category && t.date) {
+              const txnId = t.id || Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
+              await pool.query(
+                `INSERT INTO public.transactions (id, user_id, created_by, description, amount, type, category, date)
+                 VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+                 ON CONFLICT (id) DO NOTHING`,
+                [txnId, user.id, user.name, t.description, t.amount, t.type, t.category, t.date]
+              );
+            }
+          }
+        }
+
+        const token = signJwt({ id: user.id, email: user.email, name: user.name });
+        return sendJson(res, 201, {
+          token,
+          user: { id: user.id, email: user.email, name: user.name, budget: Number(user.budget) || 0 },
+        });
+      } catch (err) {
+        console.error("Register error:", err);
+        return sendJson(res, 500, { error: "Failed to create account." });
       }
     }
 
-    const token = signJwt({ id: user.id, email: user.email, name: user.name });
+    // Login
+    if (pathname === "/api/auth/login" && req.method === "POST") {
+      const { email, password } = await parseBody(req);
+      if (!email || !password) {
+        return sendJson(res, 400, { error: "Email and password are required." });
+      }
 
-    res.status(201).json({
-      token,
-      user: {
-        id: user.id,
-        email: user.email,
-        name: user.name,
-        budget: Number(user.budget) || 0,
-      },
-    });
-  } catch (err) {
-    console.error("Register error:", err);
-    res.status(500).json({ error: "Failed to create account. Please try again." });
-  }
-});
+      const normalizedEmail = email.toLowerCase().trim();
+      try {
+        const result = await pool.query(
+          "SELECT id, name, email, password_hash, budget FROM public.users WHERE email = $1",
+          [normalizedEmail]
+        );
+        if (result.rows.length === 0) {
+          return sendJson(res, 401, { error: "No account found with this email." });
+        }
+        const user = result.rows[0];
+        if (!verifyPassword(password, user.password_hash)) {
+          return sendJson(res, 401, { error: "Incorrect password." });
+        }
 
-// Login
-app.post("/api/auth/login", async (req, res) => {
-  const { email, password } = req.body;
-
-  if (!email || !password) {
-    return res.status(400).json({ error: "Email and password are required." });
-  }
-
-  const normalizedEmail = email.toLowerCase().trim();
-
-  try {
-    const result = await pool.query(
-      "SELECT id, name, email, password_hash, budget FROM public.users WHERE email = $1",
-      [normalizedEmail]
-    );
-
-    if (result.rows.length === 0) {
-      return res.status(401).json({ error: "No account found with this email. Please create one." });
+        const token = signJwt({ id: user.id, email: user.email, name: user.name });
+        return sendJson(res, 200, {
+          token,
+          user: { id: user.id, email: user.email, name: user.name, budget: Number(user.budget) || 0 },
+        });
+      } catch (err) {
+        console.error("Login error:", err);
+        return sendJson(res, 500, { error: "Server error during login." });
+      }
     }
 
-    const user = result.rows[0];
-    const isMatch = await bcrypt.compare(password, user.password_hash);
-    if (!isMatch) {
-      return res.status(401).json({ error: "Incorrect password." });
+    // Auth Me
+    if (pathname === "/api/auth/me" && req.method === "GET") {
+      const user = getUserFromReq(req);
+      if (!user) return sendJson(res, 401, { error: "Unauthorized" });
+
+      try {
+        const userRes = await pool.query("SELECT id, name, email, budget FROM public.users WHERE id = $1", [
+          user.id,
+        ]);
+        if (userRes.rows.length === 0) return sendJson(res, 404, { error: "User not found" });
+        const dbUser = userRes.rows[0];
+        return sendJson(res, 200, {
+          user: { id: dbUser.id, name: dbUser.name, email: dbUser.email, budget: Number(dbUser.budget) || 0 },
+        });
+      } catch (err) {
+        return sendJson(res, 500, { error: "Failed to fetch user" });
+      }
     }
 
-    const token = signJwt({ id: user.id, email: user.email, name: user.name });
+    // Data (Per-User Centralized Transactions & Budget)
+    if (pathname === "/api/data" && req.method === "GET") {
+      const user = getUserFromReq(req);
+      if (!user) {
+        return sendJson(res, 200, { transactions: [], budget: 0, guest: true });
+      }
 
-    res.json({
-      token,
-      user: {
-        id: user.id,
-        email: user.email,
-        name: user.name,
-        budget: Number(user.budget) || 0,
-      },
-    });
-  } catch (err) {
-    console.error("Login error:", err);
-    res.status(500).json({ error: "Server error during login." });
-  }
-});
-
-// Check current user session
-app.get("/api/auth/me", requireAuth, async (req, res) => {
-  try {
-    const userRes = await pool.query(
-      "SELECT id, name, email, budget FROM public.users WHERE id = $1",
-      [req.user.id]
-    );
-    if (userRes.rows.length === 0) {
-      return res.status(404).json({ error: "User not found" });
+      try {
+        const txnResult = await pool.query(
+          `SELECT id, user_id, created_by, description, amount::float, type, category, date, created_at
+           FROM public.transactions
+           WHERE user_id = $1
+           ORDER BY date DESC, created_at DESC`,
+          [user.id]
+        );
+        const userResult = await pool.query("SELECT budget FROM public.users WHERE id = $1", [user.id]);
+        const budget = userResult.rows.length > 0 && userResult.rows[0].budget != null ? Number(userResult.rows[0].budget) : 0;
+        return sendJson(res, 200, { transactions: txnResult.rows, budget, guest: false });
+      } catch (err) {
+        console.error("Data error:", err);
+        return sendJson(res, 500, { error: "Failed to load transactions" });
+      }
     }
-    const user = userRes.rows[0];
-    res.json({
-      user: {
-        id: user.id,
-        name: user.name,
-        email: user.email,
-        budget: Number(user.budget) || 0,
-      },
-    });
-  } catch (err) {
-    res.status(500).json({ error: "Failed to fetch user" });
+
+    // Add Transaction
+    if (pathname === "/api/transactions" && req.method === "POST") {
+      const user = getUserFromReq(req);
+      if (!user) return sendJson(res, 401, { error: "Please sign in to add transactions" });
+
+      const { id, description, amount, type, category, date } = await parseBody(req);
+      if (!description || !amount || !type || !category || !date) {
+        return sendJson(res, 400, { error: "All fields are required" });
+      }
+
+      const txnId = id || Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
+      try {
+        const result = await pool.query(
+          `INSERT INTO public.transactions (id, user_id, created_by, description, amount, type, category, date)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+           RETURNING id, user_id, created_by, description, amount::float, type, category, date, created_at`,
+          [txnId, user.id, user.name || user.email, description, amount, type, category, date]
+        );
+        broadcastSync(user.id);
+        return sendJson(res, 201, result.rows[0]);
+      } catch (err) {
+        console.error("Add transaction error:", err);
+        return sendJson(res, 500, { error: "Failed to save transaction" });
+      }
+    }
+
+    // Delete Single Transaction
+    if (pathname.startsWith("/api/transactions/") && req.method === "DELETE") {
+      const user = getUserFromReq(req);
+      if (!user) return sendJson(res, 401, { error: "Unauthorized" });
+
+      const txnId = pathname.replace("/api/transactions/", "");
+      try {
+        await pool.query("DELETE FROM public.transactions WHERE id = $1 AND user_id = $2", [txnId, user.id]);
+        broadcastSync(user.id);
+        return sendJson(res, 200, { success: true });
+      } catch (err) {
+        return sendJson(res, 500, { error: "Failed to delete" });
+      }
+    }
+
+    // Clear All Transactions
+    if (pathname === "/api/transactions" && req.method === "DELETE") {
+      const user = getUserFromReq(req);
+      if (!user) return sendJson(res, 401, { error: "Unauthorized" });
+
+      try {
+        await pool.query("DELETE FROM public.transactions WHERE user_id = $1", [user.id]);
+        broadcastSync(user.id);
+        return sendJson(res, 200, { success: true });
+      } catch (err) {
+        return sendJson(res, 500, { error: "Failed to clear" });
+      }
+    }
+
+    // Update Budget
+    if (pathname === "/api/budget" && req.method === "POST") {
+      const user = getUserFromReq(req);
+      if (!user) return sendJson(res, 401, { error: "Unauthorized" });
+
+      const { budget } = await parseBody(req);
+      if (budget == null || isNaN(budget) || budget < 0) {
+        return sendJson(res, 400, { error: "Invalid budget value" });
+      }
+
+      try {
+        await pool.query("UPDATE public.users SET budget = $1 WHERE id = $2", [budget, user.id]);
+        broadcastSync(user.id);
+        return sendJson(res, 200, { success: true, budget });
+      } catch (err) {
+        return sendJson(res, 500, { error: "Failed to update budget" });
+      }
+    }
+
+    return sendJson(res, 404, { error: "Endpoint not found" });
   }
+
+  // ─── Static File Serving ───
+  let filePath = path.join(__dirname, pathname === "/" ? "index.html" : pathname);
+  const ext = path.extname(filePath).toLowerCase();
+  const contentType = MIME_TYPES[ext] || "application/octet-stream";
+
+  fs.readFile(filePath, (err, content) => {
+    if (err) {
+      // Fallback to index.html for client routing
+      fs.readFile(path.join(__dirname, "index.html"), (err2, fallback) => {
+        if (err2) {
+          res.writeHead(404, { "Content-Type": "text/plain" });
+          res.end("Not Found");
+        } else {
+          res.writeHead(200, { "Content-Type": "text/html; charset=UTF-8" });
+          res.end(fallback);
+        }
+      });
+    } else {
+      res.writeHead(200, { "Content-Type": contentType });
+      res.end(content);
+    }
+  });
 });
 
-// ─── Data Endpoints (Strictly Per-User Sync) ─────────────
-
-// Fetch User's Centralized Transactions & Budget
-app.get("/api/data", authMiddleware, async (req, res) => {
-  if (!req.user) {
-    // If not logged in, return empty (frontend uses local cache)
-    return res.json({ transactions: [], budget: 0, guest: true });
-  }
-
-  try {
-    const txnResult = await pool.query(
-      `SELECT id, user_id, created_by, description, amount::float, type, category, date, created_at
-       FROM public.transactions
-       WHERE user_id = $1
-       ORDER BY date DESC, created_at DESC`,
-      [req.user.id]
-    );
-
-    const userResult = await pool.query(
-      "SELECT budget FROM public.users WHERE id = $1",
-      [req.user.id]
-    );
-
-    const budget =
-      userResult.rows.length > 0 && userResult.rows[0].budget != null
-        ? Number(userResult.rows[0].budget)
-        : 0;
-
-    res.json({
-      transactions: txnResult.rows,
-      budget,
-      guest: false,
-    });
-  } catch (err) {
-    console.error("Error fetching user data:", err);
-    res.status(500).json({ error: "Failed to load transactions" });
-  }
-});
-
-// Add Transaction (Linked to Authenticated User)
-app.post("/api/transactions", requireAuth, async (req, res) => {
-  const { id, description, amount, type, category, date } = req.body;
-
-  if (!description || !amount || !type || !category || !date) {
-    return res.status(400).json({ error: "All transaction fields are required." });
-  }
-
-  const txnId = id || Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
-  const userId = req.user.id;
-  const createdBy = req.user.name || req.user.email;
-
-  try {
-    const result = await pool.query(
-      `INSERT INTO public.transactions (id, user_id, created_by, description, amount, type, category, date)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-       RETURNING id, user_id, created_by, description, amount::float, type, category, date, created_at`,
-      [txnId, userId, createdBy, description, amount, type, category, date]
-    );
-
-    broadcastUserSync(userId);
-    res.status(201).json(result.rows[0]);
-  } catch (err) {
-    console.error("Error adding transaction:", err);
-    res.status(500).json({ error: "Failed to save transaction." });
-  }
-});
-
-// Delete Transaction (Only User's Own Transaction)
-app.delete("/api/transactions/:id", requireAuth, async (req, res) => {
-  const { id } = req.params;
-  try {
-    await pool.query(
-      "DELETE FROM public.transactions WHERE id = $1 AND user_id = $2",
-      [id, req.user.id]
-    );
-    broadcastUserSync(req.user.id);
-    res.json({ success: true });
-  } catch (err) {
-    console.error("Error deleting transaction:", err);
-    res.status(500).json({ error: "Failed to delete transaction." });
-  }
-});
-
-// Clear All Transactions for Current User
-app.delete("/api/transactions", requireAuth, async (req, res) => {
-  try {
-    await pool.query("DELETE FROM public.transactions WHERE user_id = $1", [
-      req.user.id,
-    ]);
-    broadcastUserSync(req.user.id);
-    res.json({ success: true });
-  } catch (err) {
-    console.error("Error clearing transactions:", err);
-    res.status(500).json({ error: "Failed to clear transactions." });
-  }
-});
-
-// Update User's Monthly Budget
-app.post("/api/budget", requireAuth, async (req, res) => {
-  const { budget } = req.body;
-  if (budget == null || isNaN(budget) || budget < 0) {
-    return res.status(400).json({ error: "Invalid budget value." });
-  }
-
-  try {
-    await pool.query(
-      "UPDATE public.users SET budget = $1 WHERE id = $2",
-      [budget, req.user.id]
-    );
-
-    broadcastUserSync(req.user.id);
-    res.json({ success: true, budget });
-  } catch (err) {
-    console.error("Error updating budget:", err);
-    res.status(500).json({ error: "Failed to update budget." });
-  }
-});
-
-// Fallback to index.html
-app.use((req, res) => {
-  res.sendFile(path.join(__dirname, "index.html"));
+// ─── Start Immediately ───────────────────────────────────
+server.listen(PORT, "0.0.0.0", () => {
+  console.log(`Server listening on port ${PORT}`);
+  initDb();
 });

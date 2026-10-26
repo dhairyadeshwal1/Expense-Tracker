@@ -51,7 +51,6 @@ const footerStorageNote = document.getElementById("footerStorageNote");
 // Cloud & Auth DOM
 const syncBadge = document.getElementById("syncBadge");
 const syncText = document.getElementById("syncText");
-const phoneGuideBtn = document.getElementById("phoneGuideBtn");
 const userChipArea = document.getElementById("userChipArea");
 
 // Auth Modal DOM
@@ -72,11 +71,6 @@ const authSubmitBtn = document.getElementById("authSubmitBtn");
 const guestModeBtn = document.getElementById("guestModeBtn");
 const authAlert = document.getElementById("authAlert");
 
-// Phone Guide Modal DOM
-const phoneModal = document.getElementById("phoneModal");
-const closePhoneModal = document.getElementById("closePhoneModal");
-const mobileUrlDisplay = document.getElementById("mobileUrlDisplay");
-const copyPhoneUrlBtn = document.getElementById("copyPhoneUrlBtn");
 
 // Toast
 const toastEl = document.getElementById("toast");
@@ -623,37 +617,10 @@ authForm.addEventListener("submit", async (e) => {
   }
 });
 
-// ─── Phone Guide Modal ──────────────────────────────────
-function openPhoneModalFn() {
-  const port = window.location.port ? `:${window.location.port}` : "";
-  const host = window.location.hostname;
-  const url = `http://${host}${port}`;
-  mobileUrlDisplay.textContent = url;
-  phoneModal.classList.remove("hidden");
-}
-
-function closePhoneModalFn() {
-  phoneModal.classList.add("hidden");
-}
-
-phoneGuideBtn.addEventListener("click", openPhoneModalFn);
-closePhoneModal.addEventListener("click", closePhoneModalFn);
-
-copyPhoneUrlBtn.addEventListener("click", () => {
-  const text = mobileUrlDisplay.textContent.trim();
-  navigator.clipboard.writeText(text).then(() => {
-    showToast("Link copied to clipboard!");
-  }).catch(() => {
-    showToast("Please copy the URL manually");
-  });
-});
-
-[authModal, phoneModal].forEach((overlay) => {
-  overlay.addEventListener("click", (e) => {
-    if (e.target === overlay) {
-      overlay.classList.add("hidden");
-    }
-  });
+authModal.addEventListener("click", (e) => {
+  if (e.target === authModal) {
+    authModal.classList.add("hidden");
+  }
 });
 
 // ─── Initial Startup ────────────────────────────────────

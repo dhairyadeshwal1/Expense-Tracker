@@ -22,9 +22,6 @@
           <span class="sync-dot"></span>
           <span id="syncText" class="sync-text">Connecting to PostgreSQL...</span>
         </div>
-        <button id="phoneGuideBtn" class="btn btn-secondary-nav btn-sm" title="How to open on phone">
-          📱 Phone Access
-        </button>
         <div id="userChipArea" class="user-chip-area">
           <button id="openAuthBtn" class="btn btn-login btn-sm">🔑 Sign In</button>
         </div>
@@ -233,46 +230,6 @@
     </div>
   </div>
 
-  <!-- ───────── Phone Access Guide Modal ───────── -->
-  <div id="phoneModal" class="modal-overlay hidden" role="dialog" aria-modal="true">
-    <div class="modal-card modal-wide">
-      <button class="modal-close" id="closePhoneModal" aria-label="Close">&times;</button>
-      
-      <div class="auth-header">
-        <div class="auth-icon-badge">📱</div>
-        <h2>Access on Your Phone</h2>
-        <p class="auth-subtitle">All transactions are stored centrally in PostgreSQL, so any phone or laptop sees the exact same data live!</p>
-      </div>
-
-      <div class="cloud-steps">
-        <div class="step-item">
-          <span class="step-num">1</span>
-          <div>
-            <strong>Connect your phone to the same Wi-Fi</strong> network as this laptop.
-          </div>
-        </div>
-        <div class="step-item">
-          <span class="step-num">2</span>
-          <div>
-            Open your phone's browser (Safari or Chrome) and enter this address:
-            <div id="mobileUrlDisplay" style="margin-top: 0.5rem; font-weight: 600; font-family: monospace; background: #fff; padding: 0.4rem 0.75rem; border-radius: 6px; border: 1px solid var(--line); color: var(--blue);">
-              http://<your-ip>:3000
-            </div>
-          </div>
-        </div>
-        <div class="step-item">
-          <span class="step-num">3</span>
-          <div>
-            <strong>Tip:</strong> Tap <em>"Add to Home Screen"</em> in Safari or Chrome to use it like a full-screen mobile app!
-          </div>
-        </div>
-      </div>
-
-      <div class="modal-actions-row">
-        <button id="copyPhoneUrlBtn" class="btn btn-primary" type="button">Copy Phone Link</button>
-      </div>
-    </div>
-  </div>
 
   <!-- Toast Notification -->
   <div id="toast" class="toast hidden"></div>

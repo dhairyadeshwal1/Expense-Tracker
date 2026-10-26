@@ -2,13 +2,49 @@ require("dotenv").config();
 const express = require("express");
 const cors = require("cors");
 const path = require("path");
+const crypto = require("crypto");
 const { Pool } = require("pg");
 const bcrypt = require("bcryptjs");
-const jwt = require("jsonwebtoken");
 
 const app = express();
 const PORT = process.env.PORT || 3000;
 const JWT_SECRET = process.env.JWT_SECRET || "student_expense_tracker_secret_2026";
+
+// ─── Native JWT (Zero dependency, ultra-fast) ───────────
+function base64Url(str) {
+  return Buffer.from(str).toString("base64url");
+}
+
+function signJwt(payload, secret = JWT_SECRET, expiresInDays = 60) {
+  const header = base64Url(JSON.stringify({ alg: "HS256", typ: "JWT" }));
+  const expPayload = base64Url(
+    JSON.stringify({
+      ...payload,
+      exp: Math.floor(Date.now() / 1000) + expiresInDays * 86400,
+    })
+  );
+  const signature = crypto
+    .createHmac("sha256", secret)
+    .update(`${header}.${expPayload}`)
+    .digest("base64url");
+  return `${header}.${expPayload}.${signature}`;
+}
+
+function verifyJwt(token, secret = JWT_SECRET) {
+  const parts = token.split(".");
+  if (parts.length !== 3) throw new Error("Invalid token");
+  const [header, payload, signature] = parts;
+  const expectedSignature = crypto
+    .createHmac("sha256", secret)
+    .update(`${header}.${payload}`)
+    .digest("base64url");
+  if (signature !== expectedSignature) throw new Error("Invalid token signature");
+  const decoded = JSON.parse(Buffer.from(payload, "base64url").toString());
+  if (decoded.exp && decoded.exp < Math.floor(Date.now() / 1000)) {
+    throw new Error("Token expired");
+  }
+  return decoded;
+}
 
 // ─── Database Connection ─────────────────────────────────
 const pool = new Pool({
@@ -26,17 +62,20 @@ pool.on("error", (err) => {
 async function initDb() {
   try {
     await pool.query(`
-      CREATE TABLE IF NOT EXISTS users (
+      CREATE TABLE IF NOT EXISTS public.users (
         id SERIAL PRIMARY KEY,
         name VARCHAR(255),
         email VARCHAR(255) UNIQUE NOT NULL,
         password_hash VARCHAR(255) NOT NULL,
+        budget NUMERIC(12, 2) DEFAULT 0,
         created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
       );
 
-      CREATE TABLE IF NOT EXISTS transactions (
+      ALTER TABLE public.users ADD COLUMN IF NOT EXISTS budget NUMERIC(12, 2) DEFAULT 0;
+
+      CREATE TABLE IF NOT EXISTS public.transactions (
         id VARCHAR(64) PRIMARY KEY,
-        user_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
+        user_id INTEGER REFERENCES public.users(id) ON DELETE CASCADE,
         created_by VARCHAR(255),
         description VARCHAR(255) NOT NULL,
         amount NUMERIC(12, 2) NOT NULL,
@@ -45,36 +84,33 @@ async function initDb() {
         date VARCHAR(32) NOT NULL,
         created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
       );
-
-      CREATE TABLE IF NOT EXISTS app_settings (
-        key VARCHAR(64) PRIMARY KEY,
-        value JSONB NOT NULL,
-        updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
-      );
     `);
-    console.log(" PostgreSQL database initialized successfully.");
+    console.log("PostgreSQL database ready.");
   } catch (err) {
-    console.error("Error initializing PostgreSQL database:", err);
+    console.error("Error initializing PostgreSQL database:", err.message);
   }
 }
-
-initDb();
 
 // ─── Middleware ──────────────────────────────────────────
 app.use(cors());
 app.use(express.json());
 app.use(express.static(__dirname));
 
-// Optional / Required JWT Middleware
+// Start listening immediately
+app.listen(PORT, "0.0.0.0", () => {
+  console.log(`Server listening on port ${PORT}`);
+  initDb();
+});
+
+// JWT Middleware
 function authMiddleware(req, res, next) {
   const authHeader = req.headers.authorization;
   if (authHeader && authHeader.startsWith("Bearer ")) {
     const token = authHeader.split(" ")[1];
     try {
-      const decoded = jwt.verify(token, JWT_SECRET);
+      const decoded = verifyJwt(token);
       req.user = decoded;
     } catch (err) {
-      // Invalid token, proceed as unauthenticated
       req.user = null;
     }
   } else {
@@ -86,23 +122,16 @@ function authMiddleware(req, res, next) {
 function requireAuth(req, res, next) {
   authMiddleware(req, res, () => {
     if (!req.user) {
-      return res.status(401).json({ error: "Authentication required" });
+      return res.status(401).json({ error: "Please sign in to access your data." });
     }
     next();
   });
 }
 
-// ─── Server-Sent Events (Real-Time Sync) ─────────────────
-const sseClients = new Set();
+// ─── Real-Time Sync (Server-Sent Events) ─────────────────
+const sseClients = new Map(); // userId -> Set of res objects
 
-function broadcastSync(event = "sync") {
-  const payload = `data: ${JSON.stringify({ event, timestamp: Date.now() })}\n\n`;
-  for (const client of sseClients) {
-    client.write(payload);
-  }
-}
-
-app.get("/api/events", (req, res) => {
+app.get("/api/events", authMiddleware, (req, res) => {
   res.writeHead(200, {
     "Content-Type": "text/event-stream",
     "Cache-Control": "no-cache",
@@ -110,66 +139,109 @@ app.get("/api/events", (req, res) => {
   });
   res.write("data: connected\n\n");
 
-  sseClients.add(res);
+  const userId = req.user ? req.user.id : "guest";
+  if (!sseClients.has(userId)) {
+    sseClients.set(userId, new Set());
+  }
+  sseClients.get(userId).add(res);
 
-  // Heartbeat to keep connection alive across mobile networks
   const heartbeat = setInterval(() => {
     res.write(": heartbeat\n\n");
   }, 25000);
 
   req.on("close", () => {
     clearInterval(heartbeat);
-    sseClients.delete(res);
+    if (sseClients.has(userId)) {
+      sseClients.get(userId).delete(res);
+      if (sseClients.get(userId).size === 0) {
+        sseClients.delete(userId);
+      }
+    }
   });
 });
 
-// ─── Auth Endpoints ─────────────────────────────────────
-app.post("/api/auth/register", async (req, res) => {
-  const { email, password, name } = req.body;
+function broadcastUserSync(userId) {
+  if (sseClients.has(userId)) {
+    const payload = `data: ${JSON.stringify({ event: "sync", timestamp: Date.now() })}\n\n`;
+    for (const client of sseClients.get(userId)) {
+      client.write(payload);
+    }
+  }
+}
 
-  if (!email || !password || password.length < 6) {
+// ─── Authentication Endpoints ───────────────────────────
+
+// Register
+app.post("/api/auth/register", async (req, res) => {
+  const { email, password, name, initialTransactions, initialBudget } = req.body;
+
+  if (!email || !password || password.length < 4) {
     return res.status(400).json({
-      error: "Valid email and a password of at least 6 characters are required.",
+      error: "Please enter a valid email and a password of at least 4 characters.",
     });
   }
 
   const normalizedEmail = email.toLowerCase().trim();
 
   try {
-    const existing = await pool.query("SELECT id FROM users WHERE email = $1", [
-      normalizedEmail,
-    ]);
+    const existing = await pool.query(
+      "SELECT id FROM public.users WHERE email = $1",
+      [normalizedEmail]
+    );
+
     if (existing.rows.length > 0) {
-      return res
-        .status(409)
-        .json({ error: "An account with this email already exists." });
+      return res.status(409).json({
+        error: "An account with this email already exists. Please Sign In.",
+      });
     }
 
     const salt = await bcrypt.genSalt(10);
     const passwordHash = await bcrypt.hash(password, salt);
-    const displayName = name ? name.trim() : normalizedEmail.split("@")[0];
+    const displayName = name && name.trim() ? name.trim() : normalizedEmail.split("@")[0];
+    const budgetVal = typeof initialBudget === "number" ? initialBudget : 0;
 
     const result = await pool.query(
-      `INSERT INTO users (name, email, password_hash)
-       VALUES ($1, $2, $3)
-       RETURNING id, name, email, created_at`,
-      [displayName, normalizedEmail, passwordHash]
+      `INSERT INTO public.users (name, email, password_hash, budget)
+       VALUES ($1, $2, $3, $4)
+       RETURNING id, name, email, budget, created_at`,
+      [displayName, normalizedEmail, passwordHash, budgetVal]
     );
 
     const user = result.rows[0];
-    const token = jwt.sign(
-      { id: user.id, email: user.email, name: user.name },
-      JWT_SECRET,
-      { expiresIn: "30d" }
-    );
 
-    res.status(201).json({ token, user });
+    // Migrate any initial guest transactions into the new account
+    if (Array.isArray(initialTransactions) && initialTransactions.length > 0) {
+      for (const t of initialTransactions) {
+        if (t.description && t.amount && t.type && t.category && t.date) {
+          const txnId = t.id || Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
+          await pool.query(
+            `INSERT INTO public.transactions (id, user_id, created_by, description, amount, type, category, date)
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+             ON CONFLICT (id) DO NOTHING`,
+            [txnId, user.id, user.name, t.description, t.amount, t.type, t.category, t.date]
+          );
+        }
+      }
+    }
+
+    const token = signJwt({ id: user.id, email: user.email, name: user.name });
+
+    res.status(201).json({
+      token,
+      user: {
+        id: user.id,
+        email: user.email,
+        name: user.name,
+        budget: Number(user.budget) || 0,
+      },
+    });
   } catch (err) {
     console.error("Register error:", err);
-    res.status(500).json({ error: "Internal server error" });
+    res.status(500).json({ error: "Failed to create account. Please try again." });
   }
 });
 
+// Login
 app.post("/api/auth/login", async (req, res) => {
   const { email, password } = req.body;
 
@@ -181,70 +253,102 @@ app.post("/api/auth/login", async (req, res) => {
 
   try {
     const result = await pool.query(
-      "SELECT id, name, email, password_hash FROM users WHERE email = $1",
+      "SELECT id, name, email, password_hash, budget FROM public.users WHERE email = $1",
       [normalizedEmail]
     );
 
     if (result.rows.length === 0) {
-      return res.status(401).json({ error: "Invalid email or password." });
+      return res.status(401).json({ error: "No account found with this email. Please create one." });
     }
 
     const user = result.rows[0];
     const isMatch = await bcrypt.compare(password, user.password_hash);
     if (!isMatch) {
-      return res.status(401).json({ error: "Invalid email or password." });
+      return res.status(401).json({ error: "Incorrect password." });
     }
 
-    const token = jwt.sign(
-      { id: user.id, email: user.email, name: user.name },
-      JWT_SECRET,
-      { expiresIn: "30d" }
-    );
+    const token = signJwt({ id: user.id, email: user.email, name: user.name });
 
     res.json({
       token,
-      user: { id: user.id, email: user.email, name: user.name },
+      user: {
+        id: user.id,
+        email: user.email,
+        name: user.name,
+        budget: Number(user.budget) || 0,
+      },
     });
   } catch (err) {
     console.error("Login error:", err);
-    res.status(500).json({ error: "Internal server error" });
+    res.status(500).json({ error: "Server error during login." });
   }
 });
 
-app.get("/api/auth/me", requireAuth, (req, res) => {
-  res.json({ user: req.user });
+// Check current user session
+app.get("/api/auth/me", requireAuth, async (req, res) => {
+  try {
+    const userRes = await pool.query(
+      "SELECT id, name, email, budget FROM public.users WHERE id = $1",
+      [req.user.id]
+    );
+    if (userRes.rows.length === 0) {
+      return res.status(404).json({ error: "User not found" });
+    }
+    const user = userRes.rows[0];
+    res.json({
+      user: {
+        id: user.id,
+        name: user.name,
+        email: user.email,
+        budget: Number(user.budget) || 0,
+      },
+    });
+  } catch (err) {
+    res.status(500).json({ error: "Failed to fetch user" });
+  }
 });
 
-// ─── Centralized Expenses & Data ────────────────────────
-app.get("/api/data", async (req, res) => {
+// ─── Data Endpoints (Strictly Per-User Sync) ─────────────
+
+// Fetch User's Centralized Transactions & Budget
+app.get("/api/data", authMiddleware, async (req, res) => {
+  if (!req.user) {
+    // If not logged in, return empty (frontend uses local cache)
+    return res.json({ transactions: [], budget: 0, guest: true });
+  }
+
   try {
     const txnResult = await pool.query(
       `SELECT id, user_id, created_by, description, amount::float, type, category, date, created_at
-       FROM transactions
-       ORDER BY date DESC, created_at DESC`
+       FROM public.transactions
+       WHERE user_id = $1
+       ORDER BY date DESC, created_at DESC`,
+      [req.user.id]
     );
 
-    const budgetResult = await pool.query(
-      `SELECT value FROM app_settings WHERE key = 'monthly_budget'`
+    const userResult = await pool.query(
+      "SELECT budget FROM public.users WHERE id = $1",
+      [req.user.id]
     );
 
     const budget =
-      budgetResult.rows.length > 0 && budgetResult.rows[0].value != null
-        ? Number(budgetResult.rows[0].value)
+      userResult.rows.length > 0 && userResult.rows[0].budget != null
+        ? Number(userResult.rows[0].budget)
         : 0;
 
     res.json({
       transactions: txnResult.rows,
       budget,
+      guest: false,
     });
   } catch (err) {
-    console.error("Error fetching data:", err);
-    res.status(500).json({ error: "Failed to fetch transactions" });
+    console.error("Error fetching user data:", err);
+    res.status(500).json({ error: "Failed to load transactions" });
   }
 });
 
-// Add a Transaction
-app.post("/api/transactions", authMiddleware, async (req, res) => {
+// Add Transaction (Linked to Authenticated User)
+app.post("/api/transactions", requireAuth, async (req, res) => {
   const { id, description, amount, type, category, date } = req.body;
 
   if (!description || !amount || !type || !category || !date) {
@@ -252,31 +356,34 @@ app.post("/api/transactions", authMiddleware, async (req, res) => {
   }
 
   const txnId = id || Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
-  const userId = req.user ? req.user.id : null;
-  const createdBy = req.user ? (req.user.name || req.user.email) : "Guest / Shared";
+  const userId = req.user.id;
+  const createdBy = req.user.name || req.user.email;
 
   try {
     const result = await pool.query(
-      `INSERT INTO transactions (id, user_id, created_by, description, amount, type, category, date)
+      `INSERT INTO public.transactions (id, user_id, created_by, description, amount, type, category, date)
        VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
        RETURNING id, user_id, created_by, description, amount::float, type, category, date, created_at`,
       [txnId, userId, createdBy, description, amount, type, category, date]
     );
 
-    broadcastSync("transaction_added");
+    broadcastUserSync(userId);
     res.status(201).json(result.rows[0]);
   } catch (err) {
     console.error("Error adding transaction:", err);
-    res.status(500).json({ error: "Failed to save transaction to database." });
+    res.status(500).json({ error: "Failed to save transaction." });
   }
 });
 
-// Delete a Transaction
-app.delete("/api/transactions/:id", async (req, res) => {
+// Delete Transaction (Only User's Own Transaction)
+app.delete("/api/transactions/:id", requireAuth, async (req, res) => {
   const { id } = req.params;
   try {
-    await pool.query("DELETE FROM transactions WHERE id = $1", [id]);
-    broadcastSync("transaction_deleted");
+    await pool.query(
+      "DELETE FROM public.transactions WHERE id = $1 AND user_id = $2",
+      [id, req.user.id]
+    );
+    broadcastUserSync(req.user.id);
     res.json({ success: true });
   } catch (err) {
     console.error("Error deleting transaction:", err);
@@ -284,11 +391,13 @@ app.delete("/api/transactions/:id", async (req, res) => {
   }
 });
 
-// Clear All Transactions
-app.delete("/api/transactions", async (req, res) => {
+// Clear All Transactions for Current User
+app.delete("/api/transactions", requireAuth, async (req, res) => {
   try {
-    await pool.query("TRUNCATE TABLE transactions");
-    broadcastSync("transactions_cleared");
+    await pool.query("DELETE FROM public.transactions WHERE user_id = $1", [
+      req.user.id,
+    ]);
+    broadcastUserSync(req.user.id);
     res.json({ success: true });
   } catch (err) {
     console.error("Error clearing transactions:", err);
@@ -296,8 +405,8 @@ app.delete("/api/transactions", async (req, res) => {
   }
 });
 
-// Set Centralized Monthly Budget
-app.post("/api/budget", async (req, res) => {
+// Update User's Monthly Budget
+app.post("/api/budget", requireAuth, async (req, res) => {
   const { budget } = req.body;
   if (budget == null || isNaN(budget) || budget < 0) {
     return res.status(400).json({ error: "Invalid budget value." });
@@ -305,17 +414,14 @@ app.post("/api/budget", async (req, res) => {
 
   try {
     await pool.query(
-      `INSERT INTO app_settings (key, value, updated_at)
-       VALUES ('monthly_budget', $1, NOW())
-       ON CONFLICT (key) DO UPDATE
-       SET value = EXCLUDED.value, updated_at = NOW()`,
-      [JSON.stringify(budget)]
+      "UPDATE public.users SET budget = $1 WHERE id = $2",
+      [budget, req.user.id]
     );
 
-    broadcastSync("budget_updated");
+    broadcastUserSync(req.user.id);
     res.json({ success: true, budget });
   } catch (err) {
-    console.error("Error setting budget:", err);
+    console.error("Error updating budget:", err);
     res.status(500).json({ error: "Failed to update budget." });
   }
 });
@@ -323,10 +429,4 @@ app.post("/api/budget", async (req, res) => {
 // Fallback to index.html
 app.use((req, res) => {
   res.sendFile(path.join(__dirname, "index.html"));
-});
-
-// ─── Start Server ────────────────────────────────────────
-app.listen(PORT, "0.0.0.0", () => {
-  console.log(`Server listening on port ${PORT}`);
-  console.log(`Centralized PostgreSQL Connected: Supabase`);
 });

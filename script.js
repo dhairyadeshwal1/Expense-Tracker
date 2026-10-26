@@ -2,6 +2,12 @@
 const STATE_KEY = "studentExpenseTracker_cache";
 const TOKEN_KEY = "studentExpenseTracker_token";
 
+// Automatically target port 3000 if opened via file:// or Live Server (port 5500)
+const API_BASE =
+  window.location.protocol === "file:" || (window.location.port && window.location.port !== "3000")
+    ? "http://localhost:3000"
+    : "";
+
 let state = loadLocalCache();
 let currentUser = null;
 let sseConnection = null;
@@ -71,7 +77,6 @@ const authSubmitBtn = document.getElementById("authSubmitBtn");
 const guestModeBtn = document.getElementById("guestModeBtn");
 const authAlert = document.getElementById("authAlert");
 
-
 // Toast
 const toastEl = document.getElementById("toast");
 let authMode = "signin";
@@ -125,12 +130,35 @@ function updateSyncStatus(status, text) {
   syncText.textContent = text || status;
 }
 
-// ─── Fetch Centralized PostgreSQL Data ───────────────────
-async function fetchCentralizedData(silent = false) {
+// ─── Fetch Authenticated User's Data ────────────────────
+async function fetchUserData(silent = false) {
+  const token = localStorage.getItem(TOKEN_KEY);
+
+  if (!token) {
+    updateSyncStatus("guest", "Guest Mode (Local Only - Sign In to Sync)");
+    if (footerStorageNote) {
+      footerStorageNote.textContent = "Data saved locally in browser";
+    }
+    renderAll();
+    return;
+  }
+
   if (!silent) updateSyncStatus("syncing", "Syncing with PostgreSQL...");
 
   try {
-    const res = await fetch("/api/data");
+    const res = await fetch(`${API_BASE}/api/data`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+
+    if (res.status === 401) {
+      // Token expired
+      localStorage.removeItem(TOKEN_KEY);
+      currentUser = null;
+      renderLoggedOutChip();
+      updateSyncStatus("guest", "Session expired. Please Sign In.");
+      return;
+    }
+
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
 
     const data = await res.json();
@@ -138,12 +166,13 @@ async function fetchCentralizedData(silent = false) {
       transactions: Array.isArray(data.transactions) ? data.transactions : [],
       budget: typeof data.budget === "number" ? data.budget : 0,
     };
+
     saveLocalCache(state);
     renderAll();
-    updateSyncStatus("synced", "🐘 Centralized PostgreSQL Synced");
+    updateSyncStatus("synced", `🟢 PostgreSQL Synced (${currentUser ? currentUser.email : "Account"})`);
   } catch (err) {
     console.warn("Could not reach PostgreSQL backend:", err);
-    updateSyncStatus("error", "Database Disconnected (Using Local Cache)");
+    updateSyncStatus("error", "Offline / Server Disconnected");
   }
 }
 
@@ -155,30 +184,38 @@ function setupSSE() {
     sseConnection.close();
   }
 
-  sseConnection = new EventSource("/api/events");
+  const token = localStorage.getItem(TOKEN_KEY);
+  if (!token) return;
 
-  sseConnection.onmessage = (e) => {
-    try {
-      const msg = JSON.parse(e.data);
-      if (msg && msg.event) {
-        fetchCentralizedData(true);
+  // Connect SSE
+  try {
+    sseConnection = new EventSource(`${API_BASE}/api/events`);
+    sseConnection.onmessage = (e) => {
+      try {
+        const msg = JSON.parse(e.data);
+        if (msg && msg.event === "sync") {
+          fetchUserData(true);
+        }
+      } catch (err) {
+        // heartbeat or comment
       }
-    } catch (err) {
-      // heartbeat
-    }
-  };
+    };
+  } catch (e) {
+    console.warn("SSE init error", e);
+  }
 }
 
-// ─── Check Current Auth User ────────────────────────────
+// ─── Check Auth Session on Startup ──────────────────────
 async function checkAuth() {
   const token = localStorage.getItem(TOKEN_KEY);
   if (!token) {
     renderLoggedOutChip();
+    updateSyncStatus("guest", "Guest Mode (Click Sign In)");
     return;
   }
 
   try {
-    const res = await fetch("/api/auth/me", {
+    const res = await fetch(`${API_BASE}/api/auth/me`, {
       headers: { Authorization: `Bearer ${token}` },
     });
 
@@ -187,8 +224,10 @@ async function checkAuth() {
       currentUser = data.user;
       renderUserChip(currentUser);
       if (footerStorageNote) {
-        footerStorageNote.textContent = `Logged in as ${currentUser.name || currentUser.email} · Centralized PostgreSQL`;
+        footerStorageNote.textContent = `Synced with account: ${currentUser.email} (PostgreSQL)`;
       }
+      setupSSE();
+      fetchUserData();
     } else {
       localStorage.removeItem(TOKEN_KEY);
       currentUser = null;
@@ -197,6 +236,7 @@ async function checkAuth() {
   } catch (err) {
     console.error("Auth check failed:", err);
     renderLoggedOutChip();
+    updateSyncStatus("error", "Backend server not reached (npm start)");
   }
 }
 
@@ -215,17 +255,25 @@ function renderUserChip(user) {
   document.getElementById("logoutBtn").addEventListener("click", () => {
     localStorage.removeItem(TOKEN_KEY);
     currentUser = null;
+    if (sseConnection) {
+      sseConnection.close();
+      sseConnection = null;
+    }
     renderLoggedOutChip();
-    showToast("Logged out");
+    showToast("Signed out");
+    state = { transactions: [], budget: 0 };
+    saveLocalCache(state);
+    renderAll();
+    updateSyncStatus("guest", "Guest Mode");
     if (footerStorageNote) {
-      footerStorageNote.textContent = "Centralized PostgreSQL Storage";
+      footerStorageNote.textContent = "Data saved locally";
     }
   });
 }
 
 function renderLoggedOutChip() {
   userChipArea.innerHTML = `
-    <button id="openAuthBtn" class="btn btn-login btn-sm">🔑 Sign In</button>
+    <button id="openAuthBtn" class="btn btn-login btn-sm">🔑 Sign In / Register</button>
   `;
   document.getElementById("openAuthBtn").addEventListener("click", openAuthModalFn);
 }
@@ -367,13 +415,13 @@ function getFilteredTransactions() {
   return list;
 }
 
-// ─── Render Transaction List (Centralized Logs) ─────────
+// ─── Render Transaction List ────────────────────────────
 function renderTransactions(animate = false) {
   const list = getFilteredTransactions();
 
   if (list.length === 0) {
     transactionList.innerHTML =
-      '<li class="empty-msg">No transactions in centralized logs yet. Add one above!</li>';
+      '<li class="empty-msg">No transactions yet. Add one above!</li>';
     return;
   }
 
@@ -414,28 +462,35 @@ form.addEventListener("submit", async (e) => {
 
   state.transactions.unshift({
     ...txn,
-    created_by: currentUser ? (currentUser.name || currentUser.email) : "Shared User",
+    created_by: currentUser ? (currentUser.name || currentUser.email) : "You",
   });
+  saveLocalCache(state);
   renderAll(true);
 
   form.reset();
   dateInput.value = new Date().toISOString().slice(0, 10);
 
+  const token = localStorage.getItem(TOKEN_KEY);
+  if (!token) {
+    showToast("Added locally (Sign in to sync with your phone)");
+    return;
+  }
+
   try {
-    const res = await fetch("/api/transactions", {
+    const res = await fetch(`${API_BASE}/api/transactions`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        ...getAuthHeader(),
+        Authorization: `Bearer ${token}`,
       },
       body: JSON.stringify(txn),
     });
 
     if (!res.ok) throw new Error("Failed to save to PostgreSQL");
-    showToast("Saved to Centralized PostgreSQL!");
+    showToast("Synced to your PostgreSQL account!");
   } catch (err) {
     console.error("Save error:", err);
-    showToast("Error saving to database. Stored locally.");
+    showToast("Saved locally. Will sync when server is reachable.");
   }
 });
 
@@ -446,14 +501,21 @@ transactionList.addEventListener("click", async (e) => {
 
   const id = btn.dataset.id;
   state.transactions = state.transactions.filter((t) => t.id !== id);
+  saveLocalCache(state);
   renderAll();
 
+  const token = localStorage.getItem(TOKEN_KEY);
+  if (!token) {
+    showToast("Transaction deleted");
+    return;
+  }
+
   try {
-    await fetch(`/api/transactions/${id}`, {
+    await fetch(`${API_BASE}/api/transactions/${id}`, {
       method: "DELETE",
-      headers: getAuthHeader(),
+      headers: { Authorization: `Bearer ${token}` },
     });
-    showToast("Transaction deleted from centralized logs");
+    showToast("Transaction deleted from your account");
   } catch (err) {
     console.error("Delete error:", err);
   }
@@ -461,16 +523,23 @@ transactionList.addEventListener("click", async (e) => {
 
 // ─── Clear All ──────────────────────────────────────────
 clearAllBtn.addEventListener("click", async () => {
-  if (!confirm("Are you sure you want to clear ALL centralized transactions?")) return;
+  if (!confirm("Are you sure you want to clear ALL your transactions?")) return;
   state.transactions = [];
+  saveLocalCache(state);
   renderAll();
 
+  const token = localStorage.getItem(TOKEN_KEY);
+  if (!token) {
+    showToast("Transactions cleared");
+    return;
+  }
+
   try {
-    await fetch("/api/transactions", {
+    await fetch(`${API_BASE}/api/transactions`, {
       method: "DELETE",
-      headers: getAuthHeader(),
+      headers: { Authorization: `Bearer ${token}` },
     });
-    showToast("Centralized logs cleared");
+    showToast("All transactions cleared from your account");
   } catch (err) {
     console.error("Clear error:", err);
   }
@@ -482,20 +551,27 @@ setBudgetBtn.addEventListener("click", async () => {
   if (isNaN(val) || val < 0) return;
 
   state.budget = val;
+  saveLocalCache(state);
   budgetInput.value = "";
   renderSummary();
   renderBudget();
 
+  const token = localStorage.getItem(TOKEN_KEY);
+  if (!token) {
+    showToast(`Monthly budget set to ${formatCurrency(val)} (Local)`);
+    return;
+  }
+
   try {
-    await fetch("/api/budget", {
+    await fetch(`${API_BASE}/api/budget`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        ...getAuthHeader(),
+        Authorization: `Bearer ${token}`,
       },
       body: JSON.stringify({ budget: val }),
     });
-    showToast(`Centralized budget updated to ${formatCurrency(val)}`);
+    showToast(`Monthly budget synced: ${formatCurrency(val)}`);
   } catch (err) {
     console.error("Budget save error:", err);
   }
@@ -537,7 +613,7 @@ function setAuthMode(mode) {
     tabSignUp.classList.remove("active");
     nameGroup.classList.add("hidden");
     authModalTitle.textContent = "Welcome Back";
-    authModalSubtitle.textContent = "Sign in to log expenses with your account name";
+    authModalSubtitle.textContent = "Sign in to access and sync your expenses";
     authSubmitBtn.textContent = "Sign In";
     passwordHint.style.display = "none";
   } else {
@@ -545,7 +621,7 @@ function setAuthMode(mode) {
     tabSignIn.classList.remove("active");
     nameGroup.classList.remove("hidden");
     authModalTitle.textContent = "Create Account";
-    authModalSubtitle.textContent = "Log centralized expenses with your name attached";
+    authModalSubtitle.textContent = "Create your account to sync between phone and laptop";
     authSubmitBtn.textContent = "Create Account";
     passwordHint.style.display = "block";
   }
@@ -568,7 +644,7 @@ closeAuthModal.addEventListener("click", closeAuthModalFn);
 
 guestModeBtn.addEventListener("click", () => {
   closeAuthModalFn();
-  showToast("Using Shared / Guest Mode");
+  showToast("Using Guest Mode (Data stored only on this browser)");
 });
 
 togglePasswordBtn.addEventListener("click", () => {
@@ -585,14 +661,23 @@ authForm.addEventListener("submit", async (e) => {
   const name = authName.value.trim();
 
   authSubmitBtn.disabled = true;
-  authSubmitBtn.textContent = "Please wait…";
+  authSubmitBtn.textContent = authMode === "signup" ? "Creating account…" : "Signing in…";
   clearAuthAlert();
 
   const endpoint = authMode === "signup" ? "/api/auth/register" : "/api/auth/login";
-  const payload = authMode === "signup" ? { email, password, name } : { email, password };
+  const payload =
+    authMode === "signup"
+      ? {
+          email,
+          password,
+          name,
+          initialTransactions: state.transactions,
+          initialBudget: state.budget,
+        }
+      : { email, password };
 
   try {
-    const res = await fetch(endpoint, {
+    const res = await fetch(`${API_BASE}${endpoint}`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload),
@@ -607,10 +692,17 @@ authForm.addEventListener("submit", async (e) => {
     currentUser = data.user;
     renderUserChip(currentUser);
     closeAuthModalFn();
-    showToast(authMode === "signup" ? "Account created!" : "Signed in!");
-    fetchCentralizedData(true);
+    showToast(authMode === "signup" ? "Account created and data synced!" : "Signed in successfully!");
+
+    setupSSE();
+    fetchUserData();
   } catch (err) {
-    showAuthAlert(err.message, "error");
+    console.error("Auth error:", err);
+    if (err.name === "TypeError" && err.message.includes("fetch")) {
+      showAuthAlert("Cannot reach server. Make sure 'npm start' is running.", "error");
+    } else {
+      showAuthAlert(err.message, "error");
+    }
   } finally {
     authSubmitBtn.disabled = false;
     authSubmitBtn.textContent = authMode === "signin" ? "Sign In" : "Create Account";
@@ -625,6 +717,4 @@ authModal.addEventListener("click", (e) => {
 
 // ─── Initial Startup ────────────────────────────────────
 renderAll();
-fetchCentralizedData();
-setupSSE();
 checkAuth();

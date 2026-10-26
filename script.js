@@ -61,20 +61,38 @@ function computeTotals() {
     if (t.type === "income") income += t.amount;
     else expense += t.amount;
   });
-  return { income, expense, balance: income - expense };
+  return { income, expense };
+}
+
+function computeMonthlyExpenses() {
+  const now = new Date();
+  return state.transactions.reduce((total, transaction) => {
+    const date = new Date(transaction.date + "T00:00:00");
+    if (
+      transaction.type === "expense" &&
+      date.getFullYear() === now.getFullYear() &&
+      date.getMonth() === now.getMonth()
+    ) {
+      return total + transaction.amount;
+    }
+    return total;
+  }, 0);
 }
 
 // ─── Render Summary ─────────────────────────────────────
 function renderSummary() {
-  const { income, expense, balance } = computeTotals();
+  const { income, expense } = computeTotals();
   totalIncomeEl.textContent = formatCurrency(income);
   totalExpenseEl.textContent = formatCurrency(expense);
-  balanceEl.textContent = formatCurrency(balance);
+  const remainingBudget =
+    state.budget > 0 ? state.budget - computeMonthlyExpenses() : 0;
+  balanceEl.textContent = formatCurrency(remainingBudget);
+  balanceEl.classList.toggle("over", remainingBudget < 0);
 }
 
 // ─── Render Budget Bar ──────────────────────────────────
 function renderBudget() {
-  const { expense } = computeTotals();
+  const expense = computeMonthlyExpenses();
   const budget = state.budget;
 
   if (budget <= 0) {
@@ -265,6 +283,7 @@ setBudgetBtn.addEventListener("click", () => {
   state.budget = val;
   saveState(state);
   budgetInput.value = "";
+  renderSummary();
   renderBudget();
 });
 

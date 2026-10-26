@@ -13,7 +13,7 @@ A clean, minimal, and beautifully designed expense tracker built for students �
 
 - **Track Income & Expenses** — Add transactions with description, amount, date, and category
 - **Monthly Budget** — Set a budget and visualize spending with a progress bar
-- **Dashboard Summary** — View total income, expenses, and balance at a glance
+- **Dashboard Summary** — View total income and expenses, plus the current month's remaining budget
 - **Category Breakdown** — Visual bar chart of expenses by category
 - **Filter & Search** — Search by description, filter by type/category, sort by date or amount
 - **14 Built-in Categories** — Food, Transport, Books, Rent, Freelance, Scholarship & more

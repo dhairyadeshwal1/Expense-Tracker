@@ -158,6 +158,10 @@ main {
   color: var(--blue);
 }
 
+.summary-item.balance .summary-value.over {
+  color: var(--red);
+}
+
 .form-group {
   margin-bottom: 1rem;
 }

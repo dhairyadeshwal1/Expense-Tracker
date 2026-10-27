@@ -8,6 +8,15 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="style.css" />
+  <noscript>
+    <style>
+      .top-nav, header, main, footer {
+        opacity: 1 !important;
+        transform: none !important;
+        filter: none !important;
+      }
+    </style>
+  </noscript>
 </head>
 <body>
   <!-- ───────── Interactive Dot Grid Background ───────── -->
@@ -35,6 +44,7 @@
   <!-- ───────── Header ───────── -->
   <header>
     <h1>Expense Tracker</h1>
+    <h6>By Prodtools</h6>
     <p class="subtitle">Centralized telemetry &middot; Real-time PostgreSQL sync across all devices</p>
   </header>
 
@@ -184,6 +194,7 @@
   <!-- ───────── Footer ───────── -->
   <footer>
     <p>Expense Tracker &middot; <span id="footerStorageNote">Centralized PostgreSQL Storage</span></p>
+    <p>Made by Dhairya Deshwal · Powered by Prodtools</p>
   </footer>
 
   <!-- ───────── Auth Modal ───────── -->
@@ -232,6 +243,76 @@
     </div>
   </div>
 
+
+  <!-- ───────── AI Financial Assistant Widget ───────── -->
+  <div id="aiChatWidget" class="ai-widget">
+    <!-- Floating Launcher Pill Button -->
+    <button id="aiLauncherBtn" class="ai-launcher-btn" aria-label="Open AI Financial Assistant" title="Ask AI Financial Assistant">
+      <span class="ai-launcher-icon">✦</span>
+      <span class="ai-launcher-text">Ask AI</span>
+      <span class="ai-pulse-dot" title="AI Ready"></span>
+    </button>
+
+    <!-- Expandable Chat Panel Window -->
+    <div id="aiChatPanel" class="ai-chat-panel hidden" role="region" aria-label="AI Financial Assistant">
+      <!-- Header -->
+      <div class="ai-header">
+        <div class="ai-header-info">
+          <div class="ai-avatar">✦</div>
+          <div>
+            <h3 class="ai-title">AI Financial Assistant</h3>
+            <span class="ai-status"><span class="ai-status-dot"></span> PostgreSQL Telemetry Active</span>
+          </div>
+        </div>
+        <div class="ai-header-actions">
+          <button id="aiClearBtn" class="ai-icon-btn" title="Clear Chat History">↺</button>
+          <button id="aiCloseBtn" class="ai-icon-btn" title="Close Chat">&times;</button>
+        </div>
+      </div>
+
+      <!-- Quick Suggestion Pills -->
+      <div class="ai-suggestions" id="aiSuggestions">
+        <button class="ai-chip" data-prompt="How much money did I add?">💰 How much did I add?</button>
+        <button class="ai-chip" data-prompt="How much did I spend this month?">📊 How much did I spend?</button>
+        <button class="ai-chip" data-prompt="Add ₹250 for Lunch">➕ Add ₹250 Lunch</button>
+        <button class="ai-chip" data-prompt="Set my monthly budget to ₹15,000">🎯 Set Budget ₹15k</button>
+        <button class="ai-chip" data-prompt="How can I save more money?">💡 Help Me Save</button>
+      </div>
+
+      <!-- Messages Stream -->
+      <div class="ai-messages" id="aiMessages">
+        <div class="ai-msg ai-msg-bot">
+          <div class="ai-msg-bubble">
+            <p>Hey there! I'm your <strong>AI Financial Assistant</strong>. I can track your cash flow, log transactions, manage budgets, and coach you to save:</p>
+            <ul class="ai-help-list">
+              <li>&ldquo;How much money did I add?&rdquo;</li>
+              <li>&ldquo;Add ₹350 for Books &amp; Supplies&rdquo;</li>
+              <li>&ldquo;Set my budget to ₹15,000&rdquo;</li>
+              <li>&ldquo;How can I save money this month?&rdquo;</li>
+            </ul>
+          </div>
+          <span class="ai-msg-time">Just now</span>
+        </div>
+      </div>
+
+      <!-- Input Form -->
+      <form id="aiChatForm" class="ai-input-form">
+        <input
+          type="text"
+          id="aiChatInput"
+          class="ai-chat-input"
+          placeholder="Ask AI, add expense, set budget…"
+          autocomplete="off"
+        />
+        <button type="submit" id="aiSendBtn" class="ai-send-btn" aria-label="Send Message" title="Send">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round">
+            <line x1="22" y1="2" x2="11" y2="13"></line>
+            <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
+          </svg>
+        </button>
+      </form>
+    </div>
+  </div>
 
   <!-- Toast Notification -->
   <div id="toast" class="toast hidden"></div>

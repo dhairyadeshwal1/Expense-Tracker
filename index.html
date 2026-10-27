@@ -22,7 +22,7 @@
   <!-- ───────── Interactive Dot Grid Background ───────── -->
   <canvas id="dotCanvas" class="dot-canvas" aria-hidden="true"></canvas>
 
-  <!-- ───────── Webpage Header (Integrated Telemetry & Sign In) ───────── -->
+  <!-- ───────── Webpage Header (Integrated Storage Status) ───────── -->
   <header class="app-header" id="top">
     <div class="header-inner">
       <div class="header-brand-block">
@@ -33,17 +33,14 @@
         <div class="header-meta-row">
           <span class="company-badge-simple">By Prodtools</span>
           <span class="header-divider">&middot;</span>
-          <p class="subtitle">Centralized telemetry &middot; Real-time PostgreSQL sync across all devices</p>
+          <p class="subtitle">Private &amp; fast &middot; Storing locally on your device</p>
         </div>
       </div>
 
       <div class="header-actions">
-        <div id="syncBadge" class="sync-badge syncing" title="PostgreSQL Database Status">
-          <span class="sync-dot"></span>
-          <span id="syncText" class="sync-text">Connecting to PostgreSQL...</span>
-        </div>
-        <div id="userChipArea" class="user-chip-area">
-          <button id="openAuthBtn" class="btn btn-login btn-sm">Sign In</button>
+        <div id="storageBadge" class="storage-badge" title="Data stored privately on this device">
+          <span class="storage-dot"></span>
+          <span id="storageText" class="storage-text">Storing locally on your device</span>
         </div>
       </div>
     </div>
@@ -194,55 +191,9 @@
 
   <!-- ───────── Footer ───────── -->
   <footer>
-    <p>Expense Tracker &middot; <span id="footerStorageNote">Centralized PostgreSQL Storage</span></p>
+    <p>Expense Tracker &middot; <span id="footerStorageNote">Storing locally on your device</span></p>
     <p>Made by Dhairya Deshwal &middot; Powered by Prodtools</p>
   </footer>
-
-  <!-- ───────── Auth Modal ───────── -->
-  <div id="authModal" class="modal-overlay hidden" role="dialog" aria-modal="true">
-    <div class="modal-card">
-      <button class="modal-close" id="closeAuthModal" aria-label="Close">&times;</button>
-      
-      <div class="auth-header">
-        <h2 id="authModalTitle">Welcome Back</h2>
-        <p class="auth-subtitle" id="authModalSubtitle">Sign in to sync your account telemetry across devices</p>
-      </div>
-
-      <div class="auth-tabs">
-        <button id="tabSignIn" class="auth-tab active" type="button">Sign In</button>
-        <button id="tabSignUp" class="auth-tab" type="button">Create Account</button>
-      </div>
-
-      <div id="authAlert" class="auth-alert hidden"></div>
-
-      <form id="authForm">
-        <div class="form-group hidden" id="nameGroup">
-          <label for="authName">Your Name</label>
-          <input type="text" id="authName" placeholder="e.g. Alex Sharma" autocomplete="name" />
-        </div>
-
-        <div class="form-group">
-          <label for="authEmail">Email Address</label>
-          <input type="email" id="authEmail" placeholder="student@example.com" required autocomplete="email" />
-        </div>
-
-        <div class="form-group">
-          <label for="authPassword">Password</label>
-          <div class="password-wrapper">
-            <input type="password" id="authPassword" placeholder="••••••••" required autocomplete="current-password" minlength="6" />
-            <button type="button" id="togglePasswordBtn" class="btn-toggle-pw" title="Show/Hide Password">Show</button>
-          </div>
-          <span class="auth-hint" id="passwordHint" style="display:none;">At least 6 characters</span>
-        </div>
-
-        <button type="submit" id="authSubmitBtn" class="btn btn-auth-submit">Sign In</button>
-      </form>
-
-      <div class="auth-footer">
-        <button id="guestModeBtn" class="btn-link" type="button">Continue as Guest / Shared User</button>
-      </div>
-    </div>
-  </div>
 
   <!-- ───────── AI Financial Assistant Widget ───────── -->
   <div id="aiChatWidget" class="ai-widget">
@@ -261,7 +212,7 @@
           <div class="ai-avatar">✦</div>
           <div>
             <h3 class="ai-title">AI Financial Assistant</h3>
-            <span class="ai-status"><span class="ai-status-dot"></span> PostgreSQL Telemetry Active</span>
+            <span class="ai-status"><span class="ai-status-dot"></span> Storing locally on your device</span>
           </div>
         </div>
         <div class="ai-header-actions">

@@ -94,7 +94,6 @@ body {
 }
 
 /* ───────── Page Intro Sequence ("Page Starts" Transition) ───────── */
-.top-nav,
 header,
 main,
 footer {
@@ -108,7 +107,6 @@ footer {
   will-change: opacity, transform, filter;
 }
 
-body.page-loaded .top-nav,
 body.page-loaded header,
 body.page-loaded main,
 body.page-loaded footer {
@@ -117,87 +115,28 @@ body.page-loaded footer {
   filter: blur(0);
 }
 
-body.page-loaded .top-nav {
-  transition-delay: 0.05s;
-}
-
 body.page-loaded header {
-  transition-delay: 0.15s;
+  transition-delay: 0.1s;
 }
 
 body.page-loaded main {
-  transition-delay: 0.25s;
+  transition-delay: 0.22s;
 }
 
 body.page-loaded footer {
-  transition-delay: 0.35s;
-}
-
-body.intro-complete .top-nav {
-  transform: none;
-  filter: none;
-  will-change: auto;
+  transition-delay: 0.34s;
 }
 
 body.intro-complete header,
 body.intro-complete main,
 body.intro-complete footer {
+  transform: none;
   filter: none;
   will-change: auto;
 }
 
-/* ───────── Top Navigation (Floating Curved Pill Bar) ───────── */
-.top-nav {
-  position: sticky;
-  top: 1rem;
-  z-index: 100;
-  max-width: 860px;
-  width: min(100% - 2.5rem, 860px);
-  margin: 1rem auto 0.5rem;
-  background: rgba(255, 255, 255, 0.88);
-  backdrop-filter: blur(20px);
-  -webkit-backdrop-filter: blur(20px);
-  border: 1px solid var(--tesla-line);
-  border-radius: var(--radius-pill);
-  padding: 0.65rem 1.4rem;
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.04);
-  transition: all var(--ease);
-}
-
-.top-nav:hover {
-  border-color: rgba(0, 0, 0, 0.14);
-}
-
-.nav-container {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 1.25rem;
-}
-
-.nav-brand {
-  display: flex;
-  align-items: center;
-  gap: 0.65rem;
-  color: var(--tesla-black);
-  text-decoration: none;
-}
-
-.nav-logo {
-  font-size: 1.1rem;
-  color: var(--tesla-black);
-  line-height: 1;
-}
-
-.nav-title {
-  font-size: 0.84rem;
-  font-weight: 600;
-  letter-spacing: 0.12em;
-  color: var(--tesla-black);
-  text-transform: uppercase;
-}
-
-.nav-actions {
+/* ───────── Header Controls & Actions ───────── */
+.header-actions {
   display: flex;
   align-items: center;
   gap: 0.75rem;
@@ -357,26 +296,81 @@ body.intro-complete footer {
   color: var(--tesla-red);
 }
 
-/* ───────── Hero Header (Clean Minimal Sans) ───────── */
-header {
+/* ───────── Integrated App Header (Indulged in Webpage) ───────── */
+.app-header {
   position: relative;
   z-index: 1;
-  padding: 3rem 1.25rem 2rem;
-  text-align: center;
+  width: min(100% - 2.5rem, 860px);
+  margin: 2.25rem auto 1.5rem;
+  padding: 0 0.25rem;
 }
 
-header h1 {
-  font-size: clamp(2.1rem, 4.4vw, 2.9rem);
-  font-weight: 500;
-  letter-spacing: -0.03em;
-  line-height: 1.15;
+.header-inner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1.5rem;
+  flex-wrap: wrap;
+}
+
+.header-brand-block {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.header-title-row {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+}
+
+.header-logo {
+  font-size: 1.65rem;
+  line-height: 1;
   color: var(--tesla-black);
+  display: inline-block;
+  transform: translateY(-1px);
 }
 
-.subtitle {
-  margin-top: 0.55rem;
+.app-header h1 {
+  font-size: clamp(1.85rem, 4.2vw, 2.6rem);
+  font-weight: 600;
+  letter-spacing: -0.035em;
+  line-height: 1.1;
+  color: var(--tesla-black);
+  margin: 0;
+}
+
+.header-meta-row {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  flex-wrap: wrap;
+}
+
+.company-badge-simple {
+  display: inline-flex;
+  align-items: center;
+  font-size: 0.74rem;
+  font-weight: 600;
+  color: var(--tesla-blue);
+  background: var(--tesla-blue-wash);
+  border: 1px solid rgba(62, 106, 225, 0.22);
+  padding: 0.16rem 0.6rem;
+  border-radius: var(--radius-pill);
+  letter-spacing: 0.02em;
+}
+
+.header-divider {
+  color: var(--tesla-silver);
+  font-size: 0.85rem;
+}
+
+.app-header .subtitle {
+  margin: 0;
   color: var(--tesla-pewter);
-  font-size: 0.88rem;
+  font-size: 0.86rem;
   font-weight: 400;
   letter-spacing: 0.01em;
 }
@@ -1051,8 +1045,8 @@ footer {
 
 /* ───────── Responsive Breakpoints ───────── */
 @media (max-width: 768px) {
-  header h1 {
-    font-size: 2rem;
+  .app-header h1 {
+    font-size: 2.1rem;
   }
 
   .summary {
@@ -1070,27 +1064,30 @@ footer {
   }
 }
 
-@media (max-width: 560px) {
-  .top-nav {
-    margin: 0.6rem 0.85rem;
-    padding: 0.6rem 1.1rem;
-    width: auto;
+@media (max-width: 640px) {
+  .app-header {
+    margin: 1.5rem auto 1.25rem;
+    width: min(100% - 1.5rem, 860px);
   }
 
-  .nav-title {
-    font-size: 0.78rem;
+  .header-inner {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 1.15rem;
+  }
+
+  .app-header h1 {
+    font-size: 1.85rem;
+  }
+
+  .header-actions {
+    width: 100%;
+    justify-content: space-between;
   }
 
   .sync-text {
-    font-size: 0.65rem;
+    font-size: 0.68rem;
   }
-
-  header {
-    padding: 2.25rem 1rem 1.5rem;
-  }
-
-  header h1 {
-    font-size: 1.75rem;
   }
 
   main {
@@ -1523,4 +1520,6 @@ footer {
     padding: 0.55rem 1.1rem 0.55rem 0.85rem;
   }
 }
+
+
 

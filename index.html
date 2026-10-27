@@ -10,7 +10,7 @@
   <link rel="stylesheet" href="style.css" />
   <noscript>
     <style>
-      .top-nav, header, main, footer {
+      header, main, footer {
         opacity: 1 !important;
         transform: none !important;
         filter: none !important;
@@ -22,14 +22,22 @@
   <!-- ───────── Interactive Dot Grid Background ───────── -->
   <canvas id="dotCanvas" class="dot-canvas" aria-hidden="true"></canvas>
 
-  <!-- ───────── Top Navigation / Telemetry Bar ───────── -->
-  <nav class="top-nav">
-    <div class="nav-container">
-      <div class="nav-brand">
-        <span class="nav-logo">⚡</span>
-        <span class="nav-title">EXPENSE TRACKER</span>
+  <!-- ───────── Webpage Header (Integrated Telemetry & Sign In) ───────── -->
+  <header class="app-header" id="top">
+    <div class="header-inner">
+      <div class="header-brand-block">
+        <div class="header-title-row">
+          <span class="header-logo" aria-hidden="true">⚡</span>
+          <h1>Expense Tracker</h1>
+        </div>
+        <div class="header-meta-row">
+          <span class="company-badge-simple">By Prodtools</span>
+          <span class="header-divider">&middot;</span>
+          <p class="subtitle">Centralized telemetry &middot; Real-time PostgreSQL sync across all devices</p>
+        </div>
       </div>
-      <div class="nav-actions">
+
+      <div class="header-actions">
         <div id="syncBadge" class="sync-badge syncing" title="PostgreSQL Database Status">
           <span class="sync-dot"></span>
           <span id="syncText" class="sync-text">Connecting to PostgreSQL...</span>
@@ -39,13 +47,6 @@
         </div>
       </div>
     </div>
-  </nav>
-
-  <!-- ───────── Header ───────── -->
-  <header>
-    <h1>Expense Tracker</h1>
-    <h6>By Prodtools</h6>
-    <p class="subtitle">Centralized telemetry &middot; Real-time PostgreSQL sync across all devices</p>
   </header>
 
   <main>
@@ -194,7 +195,7 @@
   <!-- ───────── Footer ───────── -->
   <footer>
     <p>Expense Tracker &middot; <span id="footerStorageNote">Centralized PostgreSQL Storage</span></p>
-    <p>Made by Dhairya Deshwal · Powered by Prodtools</p>
+    <p>Made by Dhairya Deshwal &middot; Powered by Prodtools</p>
   </footer>
 
   <!-- ───────── Auth Modal ───────── -->
@@ -242,7 +243,6 @@
       </div>
     </div>
   </div>
-
 
   <!-- ───────── AI Financial Assistant Widget ───────── -->
   <div id="aiChatWidget" class="ai-widget">

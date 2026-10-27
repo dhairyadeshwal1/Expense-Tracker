@@ -1,3 +1,4 @@
+try { require("dotenv").config(); } catch (e) {}
 const http = require("http");
 const fs = require("fs");
 const path = require("path");
@@ -471,7 +472,17 @@ async function handleAiChat(rawMessage, transactions = [], budget = 0, user = nu
     return { reply };
   }
 
-  // ─── 7. Greetings & General ───
+  // ─── 7. Intent: ABOUT PRODTOOLS / CREATOR INQUIRY ───
+  if (
+    /\b(prodtools|prodtool|native company|who made|who created|about prodtools|dhairya)\b/i.test(msg)
+  ) {
+    return {
+      reply: `✦ **About Prodtools:**\n\n` +
+             `**Prodtools** is the native company behind **Expense Tracker**, focused on building fast, clean, and minimalist student productivity and finance tools with real-time PostgreSQL cloud sync.`,
+    };
+  }
+
+  // ─── 8. Greetings & General ───
   if (/^(hi|hello|hey|greetings|hola|yo)\b/i.test(msg)) {
     return {
       reply: `Hey there! 👋 I am your **AI Financial Assistant**.\n\nI can help you with:\n` +

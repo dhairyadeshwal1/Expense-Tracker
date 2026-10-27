@@ -972,6 +972,17 @@ checkAuth();
     }
   });
 
+  window.openAiChatWithPrompt = function(promptText) {
+    aiChatPanel.classList.remove("hidden");
+    if (promptText) {
+      aiChatInput.value = promptText;
+      handleUserSubmit(promptText);
+    } else {
+      aiChatInput.focus();
+    }
+    scrollToBottom();
+  };
+
   aiCloseBtn.addEventListener("click", () => {
     aiChatPanel.classList.add("hidden");
   });
@@ -1327,8 +1338,32 @@ checkAuth();
       };
     }
 
+    // 6. Prodtools Inquiry
+    if (msg.includes("prodtools") || msg.includes("company") || msg.includes("dhairya") || msg.includes("who made")) {
+      return {
+        reply: `✦ **About Prodtools:**\n\n` +
+               `**Prodtools** is the native company behind this **Expense Tracker**, building clean, minimalist productivity and finance software with real-time cloud sync.`,
+      };
+    }
+
     return {
       reply: `I can help you manage your student finances and save money! Try asking:\n\n• *"How much money did I add?"*\n• *"Add ₹250 for Pizza"*\n• *"Set my budget to ₹15,000"*\n• *"Give me tips to save money"*`,
     };
   }
+})();
+
+// ─── Smooth Scrolling for In-Page Anchors ────────────────
+(function setupSmoothScrolling() {
+  document.querySelectorAll('a[href^="#"]').forEach((anchor) => {
+    anchor.addEventListener("click", function (e) {
+      const targetId = this.getAttribute("href");
+      if (targetId && targetId !== "#") {
+        const targetEl = document.querySelector(targetId);
+        if (targetEl) {
+          e.preventDefault();
+          targetEl.scrollIntoView({ behavior: "smooth" });
+        }
+      }
+    });
+  });
 })();

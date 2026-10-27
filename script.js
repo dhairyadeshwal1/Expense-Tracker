@@ -337,7 +337,33 @@ function initLocalStorage() {
   if (storageText) {
     storageText.textContent = "Storing locally on your device";
   }
+
+  // Update Pending Dues badge on Borrow & Lend tab
+  updatePendingDuesBadge();
 }
+
+function updatePendingDuesBadge() {
+  const pendingDuesBadge = document.getElementById("pendingDuesBadge");
+  if (!pendingDuesBadge) return;
+  try {
+    const duesRaw = localStorage.getItem("borrow_lend_v1");
+    const dues = duesRaw ? JSON.parse(duesRaw) : [];
+    const pendingCount = dues.filter((d) => !d.settled).length;
+    if (pendingCount > 0) {
+      pendingDuesBadge.textContent = pendingCount;
+      pendingDuesBadge.style.display = "inline-flex";
+    } else {
+      pendingDuesBadge.style.display = "none";
+    }
+  } catch (e) {}
+}
+
+window.addEventListener("focus", updatePendingDuesBadge);
+window.addEventListener("storage", (e) => {
+  if (e.key === "borrow_lend_v1") {
+    updatePendingDuesBadge();
+  }
+});
 
 // ─── Compute Totals ─────────────────────────────────────
 function computeTotals() {
@@ -481,28 +507,40 @@ function renderTransactions(animate = false) {
 
   if (list.length === 0) {
     transactionList.innerHTML =
-      '<li class="empty-msg">No transactions yet. Add one above!</li>';
+      '<tr><td colspan="6" class="empty-msg">No transactions yet. Add one above!</td></tr>';
     return;
   }
 
   transactionList.innerHTML = list
     .map(
       (t, i) => `
-      <li class="${animate && i === 0 ? "animate-in" : ""}">
-        <div class="txn-left">
-          <span class="txn-desc">${escapeHtml(t.description)}</span>
-          <span class="txn-meta">
-            ${escapeHtml(t.category)} · ${formatDate(t.date)}
-            ${t.created_by ? `· <span class="txn-author">${escapeHtml(t.created_by)}</span>` : ""}
+      <tr class="${animate && i === 0 ? "animate-in" : ""}">
+        <td class="col-date">
+          <span class="table-date">${formatDate(t.date)}</span>
+        </td>
+        <td class="col-desc">
+          <div class="table-cell-desc">
+            <span class="txn-desc">${escapeHtml(t.description)}</span>
+            ${t.created_by ? `<span class="txn-author">by ${escapeHtml(t.created_by)}</span>` : ""}
+          </div>
+        </td>
+        <td class="col-category">
+          <span class="category-pill">${escapeHtml(t.category)}</span>
+        </td>
+        <td class="col-type">
+          <span class="type-pill ${t.type}">
+            ${t.type === "income" ? "Income" : "Expense"}
           </span>
-        </div>
-        <div class="txn-right">
+        </td>
+        <td class="col-amount text-right">
           <span class="txn-amount ${t.type}">
             ${t.type === "income" ? "+" : "−"}${formatCurrency(t.amount)}
           </span>
-          <button class="btn btn-delete" data-id="${t.id}" title="Delete">✕</button>
-        </div>
-      </li>`
+        </td>
+        <td class="col-actions text-right">
+          <button class="btn btn-delete btn-row-action" data-id="${t.id}" title="Delete transaction" aria-label="Delete">✕</button>
+        </td>
+      </tr>`
     )
     .join("");
 }

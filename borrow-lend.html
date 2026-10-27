@@ -1,0 +1,336 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Borrow &amp; Lend — Student Expense Tracker</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="style.css" />
+  <noscript>
+    <style>
+      header, main, footer {
+        opacity: 1 !important;
+        transform: none !important;
+        filter: none !important;
+      }
+    </style>
+  </noscript>
+</head>
+<body>
+  <!-- ───────── Interactive Dot Grid Background ───────── -->
+  <canvas id="dotCanvas" class="dot-canvas" aria-hidden="true"></canvas>
+
+  <!-- ───────── Webpage Header (Integrated Storage Status & Navigation) ───────── -->
+  <header class="app-header" id="top">
+    <div class="header-inner">
+      <div class="header-brand-block">
+        <div class="header-title-row">
+          <span class="header-logo" aria-hidden="true">🤝</span>
+          <h1>Borrow &amp; Lend</h1>
+        </div>
+        <div class="header-meta-row">
+          <span class="company-badge-simple">By Prodtools</span>
+          <span class="header-divider">&middot;</span>
+          <p class="subtitle">Track who you owe &amp; who owes you &middot; Storing locally on your device</p>
+        </div>
+      </div>
+
+      <div class="header-actions">
+        <div id="storageBadge" class="storage-badge" title="Data stored privately on this device">
+          <span class="storage-dot"></span>
+          <span id="storageText" class="storage-text">Storing locally on your device</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Page Navigation Switcher (Tesla Style) -->
+    <nav class="nav-switcher" aria-label="Page navigation">
+      <a href="index.html" class="nav-tab">
+        <span class="nav-tab-icon" aria-hidden="true">
+          <svg class="nav-tab-svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="2" y="5" width="20" height="14" rx="2.5"/>
+            <line x1="2" y1="10" x2="22" y2="10"/>
+          </svg>
+        </span>
+        <span class="nav-tab-text">Expenses</span>
+      </a>
+      <a href="borrow-lend.html" class="nav-tab active">
+        <span class="nav-tab-icon" aria-hidden="true">
+          <svg class="nav-tab-svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M7 16V4m0 0L3 8m4-4l4 4"/>
+            <path d="M17 8v12m0 0l4-4m-4 4l-4-4"/>
+          </svg>
+        </span>
+        <span class="nav-tab-text">Borrow &amp; Lend</span>
+        <span class="nav-tab-badge" id="pendingDuesBadge" style="display:none;">0</span>
+      </a>
+    </nav>
+  </header>
+
+  <main>
+    <!-- ───────── Summary Metrics ───────── -->
+    <section class="summary dues-summary">
+      <div class="card summary-item income">
+        <span class="summary-label">Total Lent (To Receive)</span>
+        <span class="summary-value" id="totalLentEl">₹0</span>
+        <span class="metric-meta-text" id="lentCountEl">0 pending dues</span>
+      </div>
+      <div class="card summary-item expense">
+        <span class="summary-label">Total Borrowed (To Pay)</span>
+        <span class="summary-value" id="totalBorrowedEl">₹0</span>
+        <span class="metric-meta-text" id="borrowedCountEl">0 pending dues</span>
+      </div>
+      <div class="card summary-item balance">
+        <span class="summary-label">Net Balance Position</span>
+        <span class="summary-value" id="netDuesEl">₹0</span>
+        <span class="metric-meta-text" id="netDuesStatusEl">All settled up</span>
+      </div>
+    </section>
+
+    <!-- ───────── Personal Expenses & Budget Overview ───────── -->
+    <section class="card expense-hub-card" id="expensesHubBox">
+      <div class="hub-header">
+        <div class="hub-header-text">
+          <div class="hub-badge-row">
+            <span class="hub-badge">
+              <span class="storage-dot"></span>
+              Expense Telemetry
+            </span>
+            <span class="header-divider">&middot;</span>
+            <span class="hub-caption">Synced with your local transactions</span>
+          </div>
+          <h2 class="hub-title">Personal Expenses &amp; Budget</h2>
+        </div>
+        <div class="hub-header-action">
+          <a href="index.html" class="btn btn-tesla-hub" id="openExpensesBtn">
+            <span>Open Expenses Dashboard</span>
+            <span class="btn-arrow" aria-hidden="true">&rarr;</span>
+          </a>
+        </div>
+      </div>
+
+      <div class="hub-stats-grid" id="hubExpensesStats">
+        <div class="hub-metric-card income">
+          <span class="hub-metric-label">Total Income</span>
+          <span class="hub-metric-val" id="hubTotalIncome">₹0</span>
+        </div>
+        <div class="hub-metric-card expense">
+          <span class="hub-metric-label">Total Expenses</span>
+          <span class="hub-metric-val" id="hubTotalExpense">₹0</span>
+        </div>
+        <div class="hub-metric-card balance">
+          <span class="hub-metric-label">Remaining Budget</span>
+          <span class="hub-metric-val" id="hubRemainingBudget">₹0</span>
+        </div>
+      </div>
+    </section>
+
+    <!-- ───────── Add Dues Record ───────── -->
+    <section class="card form-card">
+      <h2>Record Borrow or Lend</h2>
+      <form id="duesForm">
+        <!-- Segmented Lent vs Borrowed Mode Switch -->
+        <div class="form-group">
+          <label>Transaction Direction</label>
+          <div class="type-toggle-group" role="radiogroup" aria-label="Transaction Type">
+            <button type="button" class="type-toggle-btn active-lent" id="btnTypeLent" aria-checked="true" role="radio">
+              <span class="toggle-dot green"></span>
+              <strong>Lent Money</strong>
+              <span class="toggle-hint">(I gave money &rarr; They owe me)</span>
+            </button>
+            <button type="button" class="type-toggle-btn" id="btnTypeBorrowed" aria-checked="false" role="radio">
+              <span class="toggle-dot red"></span>
+              <strong>Borrowed Money</strong>
+              <span class="toggle-hint">(I took money &rarr; I owe them)</span>
+            </button>
+          </div>
+          <input type="hidden" id="dueType" value="lent" />
+        </div>
+
+        <div class="form-row">
+          <div class="form-group">
+            <label for="personName">Person's Name</label>
+            <input type="text" id="personName" list="contactsDatalist" placeholder="e.g. Rahul, Priya, Landlord…" required autocomplete="off" />
+            <datalist id="contactsDatalist"></datalist>
+          </div>
+          <div class="form-group">
+            <label for="dueAmount">Amount (₹)</label>
+            <input type="number" id="dueAmount" placeholder="0" min="0.01" step="0.01" required />
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label for="dueDescription">Reason / Note</label>
+          <input type="text" id="dueDescription" placeholder="e.g. Dinner bill, Concert ticket, Rent share, Emergency cash…" required />
+        </div>
+
+        <div class="form-row">
+          <div class="form-group">
+            <label for="dueDateGiven">Date Given / Taken</label>
+            <input type="date" id="dueDateGiven" required />
+          </div>
+          <div class="form-group">
+            <label for="dueDatePromised">Promised Due Date (Optional)</label>
+            <input type="date" id="dueDatePromised" />
+          </div>
+        </div>
+
+        <button type="submit" class="btn btn-add" id="submitDueBtn">Record Lent Money (+₹)</button>
+      </form>
+    </section>
+
+    <!-- ───────── People Summary Breakdown ───────── -->
+    <section class="card people-card" id="peopleSection" style="display:none;">
+      <div class="history-header">
+        <h2>People &amp; Contacts Breakdown</h2>
+        <span class="people-count-badge" id="peopleCountBadge">0 Contacts</span>
+      </div>
+      <p class="section-hint">Click any person to filter their transactions below.</p>
+      <div id="peopleList" class="people-grid"></div>
+    </section>
+
+    <!-- ───────── Filters & Search ───────── -->
+    <section class="card filter-card">
+      <h2>Filter &amp; Search Dues</h2>
+      <div class="filter-row filter-row-dues">
+        <input type="text" id="searchDuesInput" placeholder="Search person, reason…" />
+        <select id="filterDueType">
+          <option value="all">All Types</option>
+          <option value="lent">Lent (They owe me)</option>
+          <option value="borrowed">Borrowed (I owe them)</option>
+        </select>
+        <select id="filterDueStatus">
+          <option value="all">All Status</option>
+          <option value="pending" selected>Pending Dues Only ⏳</option>
+          <option value="settled">Settled Only ✓</option>
+        </select>
+        <select id="sortDuesOrder">
+          <option value="newest">Newest First</option>
+          <option value="oldest">Oldest First</option>
+          <option value="amount-high">Highest Amount</option>
+          <option value="amount-low">Lowest Amount</option>
+          <option value="due-date">Due Date Soonest</option>
+        </select>
+      </div>
+    </section>
+
+    <!-- ───────── Dues Records Table ───────── -->
+    <section class="card history-card dues-history-card">
+      <div class="history-header">
+        <div class="history-title-wrap">
+          <h2>Dues Records</h2>
+          <span class="history-caption">Tracked receivables &amp; payables</span>
+        </div>
+        <div class="history-actions">
+          <span id="duesFilteredCount" class="dues-count-pill">0 records</span>
+          <button id="clearAllDuesBtn" class="btn btn-danger">Clear All</button>
+        </div>
+      </div>
+      <div class="table-responsive">
+        <table class="tesla-table dues-table" id="duesTable">
+          <thead>
+            <tr>
+              <th scope="col" class="th-person">Person</th>
+              <th scope="col" class="th-type">Type</th>
+              <th scope="col" class="th-desc">Reason / Note</th>
+              <th scope="col" class="th-dates">Timeline</th>
+              <th scope="col" class="th-status">Status</th>
+              <th scope="col" class="th-amount text-right">Amount</th>
+              <th scope="col" class="th-actions text-right">Actions</th>
+            </tr>
+          </thead>
+          <tbody id="duesList">
+            <tr>
+              <td colspan="7" class="empty-msg">No dues recorded yet. Add your first borrow or lend record above!</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+  </main>
+
+  <!-- ───────── Footer ───────── -->
+  <footer>
+    <p>Expense Tracker &middot; Borrow &amp; Lend &middot; <span id="footerStorageNote">Storing locally on your device</span></p>
+    <p>Made by Dhairya Deshwal &middot; Powered by Prodtools</p>
+  </footer>
+
+  <!-- ───────── AI Financial Assistant Widget ───────── -->
+  <div id="aiChatWidget" class="ai-widget">
+    <!-- Floating Launcher Pill Button -->
+    <button id="aiLauncherBtn" class="ai-launcher-btn" aria-label="Open AI Financial Assistant" title="Ask AI Financial Assistant">
+      <span class="ai-launcher-icon">✦</span>
+      <span class="ai-launcher-text">Ask AI</span>
+      <span class="ai-pulse-dot" title="AI Ready"></span>
+    </button>
+
+    <!-- Expandable Chat Panel Window -->
+    <div id="aiChatPanel" class="ai-chat-panel hidden" role="region" aria-label="AI Financial Assistant">
+      <!-- Header -->
+      <div class="ai-header">
+        <div class="ai-header-info">
+          <div class="ai-avatar">✦</div>
+          <div>
+            <h3 class="ai-title">AI Financial Assistant</h3>
+            <span class="ai-status"><span class="ai-status-dot"></span> Storing locally on your device</span>
+          </div>
+        </div>
+        <div class="ai-header-actions">
+          <button id="aiClearBtn" class="ai-icon-btn" title="Clear Chat History">↺</button>
+          <button id="aiCloseBtn" class="ai-icon-btn" title="Close Chat">&times;</button>
+        </div>
+      </div>
+
+      <!-- Quick Suggestion Pills -->
+      <div class="ai-suggestions" id="aiSuggestions">
+        <button class="ai-chip" data-prompt="Who owes me money?">💰 Who owes me?</button>
+        <button class="ai-chip" data-prompt="How much money do I owe?">💸 How much do I owe?</button>
+        <button class="ai-chip" data-prompt="Lent ₹500 to Rahul for lunch">➕ Lent ₹500 Rahul</button>
+        <button class="ai-chip" data-prompt="Borrowed ₹300 from Aman for books">➕ Borrowed ₹300 Aman</button>
+        <button class="ai-chip" data-prompt="How can I settle my dues quickly?">💡 Settlement tips</button>
+      </div>
+
+      <!-- Messages Stream -->
+      <div class="ai-messages" id="aiMessages">
+        <div class="ai-msg ai-msg-bot">
+          <div class="ai-msg-bubble">
+            <p>Hey! I'm your <strong>Borrow &amp; Lend Assistant</strong>. I help you stay on top of informal loans, debts, and split bills:</p>
+            <ul class="ai-help-list">
+              <li>&ldquo;Who owes me money?&rdquo;</li>
+              <li>&ldquo;How much money do I owe?&rdquo;</li>
+              <li>&ldquo;Lent ₹500 to Rahul for Dinner&rdquo;</li>
+              <li>&ldquo;Borrowed ₹1,200 from Mom for Books&rdquo;</li>
+            </ul>
+          </div>
+          <span class="ai-msg-time">Just now</span>
+        </div>
+      </div>
+
+      <!-- Input Form -->
+      <form id="aiChatForm" class="ai-input-form">
+        <input
+          type="text"
+          id="aiChatInput"
+          class="ai-chat-input"
+          placeholder="Ask who owes you, record lent/borrowed money…"
+          autocomplete="off"
+        />
+        <button type="submit" id="aiSendBtn" class="ai-send-btn" aria-label="Send Message" title="Send">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round">
+            <line x1="22" y1="2" x2="11" y2="13"></line>
+            <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
+          </svg>
+        </button>
+      </form>
+    </div>
+  </div>
+
+  <!-- Toast Notification -->
+  <div id="toast" class="toast hidden"></div>
+
+  <!-- Borrow & Lend Application Script -->
+  <script src="borrow-lend.js"></script>
+</body>
+</html>

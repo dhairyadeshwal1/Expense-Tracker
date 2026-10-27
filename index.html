@@ -44,6 +44,29 @@
         </div>
       </div>
     </div>
+
+    <!-- Page Navigation Switcher (Tesla Style) -->
+    <nav class="nav-switcher" aria-label="Page navigation">
+      <a href="index.html" class="nav-tab active">
+        <span class="nav-tab-icon" aria-hidden="true">
+          <svg class="nav-tab-svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="2" y="5" width="20" height="14" rx="2.5"/>
+            <line x1="2" y1="10" x2="22" y2="10"/>
+          </svg>
+        </span>
+        <span class="nav-tab-text">Expenses</span>
+      </a>
+      <a href="borrow-lend.html" class="nav-tab">
+        <span class="nav-tab-icon" aria-hidden="true">
+          <svg class="nav-tab-svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M7 16V4m0 0L3 8m4-4l4 4"/>
+            <path d="M17 8v12m0 0l4-4m-4 4l-4-4"/>
+          </svg>
+        </span>
+        <span class="nav-tab-text">Borrow &amp; Lend</span>
+        <span class="nav-tab-badge" id="pendingDuesBadge" style="display:none;">0</span>
+      </a>
+    </nav>
   </header>
 
   <main>
@@ -180,12 +203,33 @@
     <!-- ───────── Transaction History ───────── -->
     <section class="card history-card">
       <div class="history-header">
-        <h2>Transaction History</h2>
-        <button id="clearAllBtn" class="btn btn-danger">Clear All</button>
+        <div class="history-title-wrap">
+          <h2>Transaction History</h2>
+          <span class="history-caption">All recorded income &amp; expense telemetry</span>
+        </div>
+        <div class="history-actions">
+          <button id="clearAllBtn" class="btn btn-danger">Clear All</button>
+        </div>
       </div>
-      <ul id="transactionList" class="transaction-list">
-        <li class="empty-msg">No transactions yet. Add one above!</li>
-      </ul>
+      <div class="table-responsive">
+        <table class="tesla-table" id="transactionTable">
+          <thead>
+            <tr>
+              <th scope="col" class="th-date">Date</th>
+              <th scope="col" class="th-desc">Description</th>
+              <th scope="col" class="th-category">Category</th>
+              <th scope="col" class="th-type">Type</th>
+              <th scope="col" class="th-amount text-right">Amount</th>
+              <th scope="col" class="th-actions text-right">Action</th>
+            </tr>
+          </thead>
+          <tbody id="transactionList">
+            <tr>
+              <td colspan="6" class="empty-msg">No transactions yet. Add one above!</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
     </section>
   </main>
 

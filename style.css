@@ -418,6 +418,139 @@ body.intro-complete footer {
   letter-spacing: 0.01em;
 }
 
+/* ───────── Page Navigation Switcher (Tesla Floating Segmented Capsule) ───────── */
+.nav-switcher {
+  width: fit-content;
+  margin: 1.35rem auto 0;
+  display: inline-flex;
+  align-items: center;
+  background: rgba(244, 244, 246, 0.88);
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  padding: 4px;
+  border-radius: var(--radius-pill);
+  gap: 4px;
+  box-shadow: 
+    inset 0 1px 2px rgba(0, 0, 0, 0.035),
+    0 6px 20px -3px rgba(23, 26, 32, 0.06);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  position: relative;
+  z-index: 2;
+  transition: box-shadow var(--ease), border-color var(--ease);
+}
+
+.nav-switcher:hover {
+  border-color: rgba(0, 0, 0, 0.12);
+  box-shadow: 
+    inset 0 1px 2px rgba(0, 0, 0, 0.03),
+    0 8px 24px -4px rgba(23, 26, 32, 0.08);
+}
+
+.nav-tab {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.6rem;
+  min-height: 38px;
+  padding: 0.48rem 1.25rem;
+  border-radius: var(--radius-pill);
+  font-size: 0.83rem;
+  font-weight: 500;
+  letter-spacing: 0.015em;
+  color: var(--tesla-pewter);
+  text-decoration: none;
+  transition:
+    color 180ms cubic-bezier(0.16, 1, 0.3, 1),
+    background-color 180ms cubic-bezier(0.16, 1, 0.3, 1),
+    box-shadow 180ms cubic-bezier(0.16, 1, 0.3, 1),
+    transform 180ms cubic-bezier(0.16, 1, 0.3, 1);
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.nav-tab-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: rgba(0, 0, 0, 0.04);
+  color: var(--tesla-pewter);
+  transition: all 180ms cubic-bezier(0.16, 1, 0.3, 1);
+  flex-shrink: 0;
+}
+
+.nav-tab-icon svg {
+  display: block;
+  stroke: currentColor;
+  transition: stroke 180ms ease;
+}
+
+.nav-tab:hover {
+  color: var(--tesla-black);
+  background: rgba(255, 255, 255, 0.8);
+  transform: translateY(-0.5px);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+}
+
+.nav-tab:hover .nav-tab-icon {
+  background: rgba(0, 0, 0, 0.07);
+  color: var(--tesla-black);
+}
+
+.nav-tab:focus-visible {
+  outline: 2px solid var(--tesla-black);
+  outline-offset: 2px;
+}
+
+/* Active Tab - Tesla Signature High-Contrast Carbon Black Pill */
+.nav-tab.active {
+  background: var(--tesla-black);
+  color: #ffffff;
+  font-weight: 600;
+  box-shadow: 
+    0 4px 14px rgba(23, 26, 32, 0.18),
+    0 1px 3px rgba(23, 26, 32, 0.12);
+  transform: none;
+}
+
+.nav-tab.active .nav-tab-icon {
+  background: rgba(255, 255, 255, 0.18);
+  color: #ffffff;
+}
+
+.nav-tab.active:hover {
+  background: #000000;
+  color: #ffffff;
+  box-shadow: 
+    0 6px 18px rgba(23, 26, 32, 0.24),
+    0 2px 4px rgba(23, 26, 32, 0.14);
+}
+
+.nav-tab-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 6px;
+  border-radius: var(--radius-pill);
+  background: var(--tesla-red);
+  color: #ffffff;
+  font-size: 10.5px;
+  font-weight: 700;
+  line-height: 1;
+  box-shadow: 0 2px 6px rgba(232, 33, 39, 0.3);
+  margin-left: 2px;
+}
+
+.nav-tab.active .nav-tab-badge {
+  background: #ffffff;
+  color: var(--tesla-black);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.18);
+}
+
 /* ───────── Main Canvas & Cards (20px Curved Corners) ───────── */
 main {
   position: relative;
@@ -712,16 +845,36 @@ textarea:focus {
   font-variant-numeric: tabular-nums;
 }
 
-/* ───────── Transaction History (Curved Stream) ───────── */
+/* ───────── Transaction History & Data Table System ───────── */
 .history-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
   margin-bottom: 1.25rem;
+  gap: 1rem;
 }
 
 .history-header h2 {
   margin-bottom: 0;
+}
+
+.history-title-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+}
+
+.history-caption {
+  font-size: 0.8rem;
+  color: var(--tesla-pewter);
+  font-weight: 400;
+  letter-spacing: 0.01em;
+}
+
+.history-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
 }
 
 .btn-danger {
@@ -731,6 +884,8 @@ textarea:focus {
   padding: 0.4rem 1rem;
   font-size: 12px;
   border-radius: var(--radius-pill);
+  cursor: pointer;
+  transition: all var(--ease);
 }
 
 .btn-danger:hover {
@@ -739,6 +894,254 @@ textarea:focus {
   background: var(--tesla-red-wash);
 }
 
+/* ═══════════════════════════════════════════════════════════
+   TESLA TELEMETRY & DATA TABLE SYSTEM
+   Precision Engineering · Tabular Alignment · Monochromatic Refinement
+   ═══════════════════════════════════════════════════════════ */
+
+table {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+}
+
+.table-responsive {
+  width: 100%;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  border-radius: var(--radius-md);
+  margin-top: 0.5rem;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(0, 0, 0, 0.15) transparent;
+}
+
+.table-responsive::-webkit-scrollbar {
+  height: 6px;
+}
+
+.table-responsive::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.table-responsive::-webkit-scrollbar-thumb {
+  background: rgba(0, 0, 0, 0.15);
+  border-radius: var(--radius-pill);
+}
+
+/* Base Tesla Table */
+.tesla-table {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+  text-align: left;
+  font-size: 13.5px;
+  line-height: 1.45;
+}
+
+/* Table Header */
+.tesla-table thead {
+  background: rgba(0, 0, 0, 0.02);
+}
+
+.tesla-table thead th {
+  padding: 0.82rem 1rem;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--tesla-pewter);
+  border-bottom: 1px solid var(--tesla-line);
+  white-space: nowrap;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.tesla-table thead th:first-child {
+  padding-left: 1.25rem;
+  border-top-left-radius: var(--radius-md);
+}
+
+.tesla-table thead th:last-child {
+  padding-right: 1.25rem;
+  border-top-right-radius: var(--radius-md);
+}
+
+.tesla-table th.text-right,
+.tesla-table td.text-right {
+  text-align: right;
+}
+
+/* Table Rows */
+.tesla-table tbody tr {
+  transition: background-color 160ms cubic-bezier(0.16, 1, 0.3, 1);
+  border-bottom: 1px solid var(--tesla-line-light);
+}
+
+.tesla-table tbody tr:hover {
+  background-color: rgba(0, 0, 0, 0.022);
+}
+
+.tesla-table tbody tr:last-child td {
+  border-bottom: none;
+}
+
+.tesla-table tbody td {
+  padding: 0.95rem 1rem;
+  border-bottom: 1px solid var(--tesla-line-light);
+  color: var(--tesla-graphite);
+  vertical-align: middle;
+}
+
+.tesla-table tbody td:first-child {
+  padding-left: 1.25rem;
+}
+
+.tesla-table tbody td:last-child {
+  padding-right: 1.25rem;
+}
+
+/* Empty Table Cell */
+.tesla-table td.empty-msg {
+  text-align: center;
+  padding: 3rem 1.5rem;
+  color: var(--tesla-silver);
+  font-size: 13.5px;
+  background: rgba(0, 0, 0, 0.01);
+}
+
+/* Date cell styling */
+.col-date {
+  white-space: nowrap;
+}
+
+.table-date {
+  font-size: 12.5px;
+  color: var(--tesla-pewter);
+  font-feature-settings: "tnum";
+}
+
+/* Description cell */
+.col-desc {
+  min-width: 140px;
+}
+
+.table-cell-desc {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+}
+
+.table-cell-desc .txn-desc {
+  font-weight: 550;
+  color: var(--tesla-black);
+  font-size: 13.5px;
+  overflow-wrap: anywhere;
+}
+
+.table-cell-desc .txn-author {
+  font-size: 11px;
+  color: var(--tesla-pewter);
+}
+
+/* Category Pills */
+.category-pill {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.22rem 0.65rem;
+  background: var(--tesla-fill);
+  border: 1px solid rgba(0, 0, 0, 0.05);
+  border-radius: var(--radius-pill);
+  font-size: 11.5px;
+  font-weight: 500;
+  color: var(--tesla-graphite);
+  white-space: nowrap;
+}
+
+/* Type Pills */
+.type-pill {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.18rem 0.62rem;
+  border-radius: var(--radius-pill);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+}
+
+.type-pill.income {
+  background: var(--tesla-green-wash);
+  color: #0b8f58;
+  border: 1px solid rgba(18, 187, 123, 0.22);
+}
+
+.type-pill.expense {
+  background: rgba(0, 0, 0, 0.04);
+  color: var(--tesla-pewter);
+  border: 1px solid rgba(0, 0, 0, 0.06);
+}
+
+/* Tabular Numerals for Amounts */
+.txn-amount,
+.due-amount {
+  font-family: inherit;
+  font-feature-settings: "tnum";
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+  font-size: 14px;
+  white-space: nowrap;
+}
+
+.txn-amount.income {
+  color: var(--tesla-green);
+}
+
+.txn-amount.expense {
+  color: var(--tesla-black);
+}
+
+/* Row Action Buttons (Clean & Minimal) */
+.btn-row-action,
+.btn-delete {
+  background: transparent;
+  border: 1px solid transparent;
+  color: var(--tesla-silver);
+  font-size: 13px;
+  cursor: pointer;
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: all var(--ease);
+}
+
+.btn-row-action:hover,
+.btn-delete:hover {
+  background: var(--tesla-red-wash);
+  color: var(--tesla-red);
+  border-color: rgba(232, 33, 39, 0.2);
+  transform: scale(1.08);
+}
+
+/* Row Insert Animation */
+@keyframes rowFadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+tr.animate-in {
+  animation: rowFadeIn 0.35s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+/* Fallback list styling for transaction list */
 .transaction-list {
   list-style: none;
 }
@@ -801,40 +1204,6 @@ textarea:focus {
   flex-shrink: 0;
   align-items: center;
   gap: 0.75rem;
-}
-
-.txn-amount {
-  font-size: 0.95rem;
-  font-weight: 600;
-  font-variant-numeric: tabular-nums;
-}
-
-.txn-amount.income {
-  color: var(--tesla-green);
-}
-
-.txn-amount.expense {
-  color: var(--tesla-red);
-}
-
-.btn-delete {
-  background: transparent;
-  border: none;
-  color: var(--tesla-silver);
-  cursor: pointer;
-  font-size: 0.85rem;
-  width: 28px;
-  height: 28px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: 50%;
-  transition: all var(--ease);
-}
-
-.btn-delete:hover {
-  color: var(--tesla-red);
-  background: var(--tesla-red-wash);
 }
 
 .empty-msg {
@@ -919,7 +1288,6 @@ footer {
 
   .sync-text {
     font-size: 0.68rem;
-  }
   }
 
   main {
@@ -1353,5 +1721,856 @@ footer {
   }
 }
 
+/* ═══════════════════════════════════════════════════════════
+   BORROW & LEND MODULE · TESLA MINIMALIST COMPONENT SUITE
+   ═══════════════════════════════════════════════════════════ */
 
+/* ───────── Metric Meta & Sub-Labels ───────── */
+.metric-meta-text {
+  display: block;
+  margin-top: 0.4rem;
+  font-size: 12px;
+  color: var(--tesla-pewter);
+  font-weight: 500;
+  letter-spacing: -0.01em;
+}
 
+/* ───────── Type Segmented Toggle Group (Lent vs Borrowed) ───────── */
+.type-toggle-group {
+  display: flex;
+  gap: 0.75rem;
+  margin-top: 0.35rem;
+  width: 100%;
+}
+
+.type-toggle-btn {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.25rem;
+  padding: 0.9rem 1.15rem;
+  background: var(--tesla-fill);
+  border: 1.5px solid var(--tesla-line);
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  transition: all var(--ease);
+  text-align: left;
+  font-family: var(--font-main);
+  color: var(--tesla-pewter);
+  position: relative;
+}
+
+.type-toggle-btn strong {
+  display: inline-flex;
+  align-items: center;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--tesla-black);
+}
+
+.type-toggle-btn:hover {
+  border-color: rgba(0, 0, 0, 0.22);
+  background: rgba(0, 0, 0, 0.025);
+}
+
+.type-toggle-btn.active-lent {
+  border-color: var(--tesla-green);
+  background: rgba(0, 135, 90, 0.06);
+}
+
+.type-toggle-btn.active-lent strong {
+  color: #006644;
+}
+
+.type-toggle-btn.active-borrowed {
+  border-color: var(--tesla-red);
+  background: rgba(222, 53, 11, 0.06);
+}
+
+.type-toggle-btn.active-borrowed strong {
+  color: #bf2600;
+}
+
+.toggle-dot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  margin-right: 6px;
+  flex-shrink: 0;
+}
+
+.toggle-dot.green {
+  background: var(--tesla-green);
+}
+
+.toggle-dot.red {
+  background: var(--tesla-red);
+}
+
+.toggle-hint {
+  font-size: 11.5px;
+  color: var(--tesla-pewter);
+  font-weight: 400;
+  line-height: 1.3;
+}
+
+.type-toggle-btn.active-lent .toggle-hint {
+  color: #006644;
+  opacity: 0.85;
+}
+
+.type-toggle-btn.active-borrowed .toggle-hint {
+  color: #bf2600;
+  opacity: 0.85;
+}
+
+/* ───────── People & Contacts Breakdown Section ───────── */
+.people-card {
+  transition: all var(--ease);
+}
+
+.people-count-badge {
+  font-size: 11.5px;
+  font-weight: 600;
+  padding: 0.22rem 0.65rem;
+  border-radius: var(--radius-pill);
+  background: var(--tesla-fill);
+  color: var(--tesla-pewter);
+  border: 1px solid var(--tesla-line);
+}
+
+.section-hint {
+  font-size: 12.5px;
+  color: var(--tesla-pewter);
+  margin: -0.4rem 0 1.15rem;
+  letter-spacing: -0.01em;
+}
+
+.people-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(210px, 1fr));
+  gap: 0.75rem;
+  margin-top: 0.4rem;
+}
+
+.person-chip {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.75rem 0.95rem;
+  background: var(--tesla-fill);
+  border: 1px solid var(--tesla-line);
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  transition: all var(--ease);
+  user-select: none;
+  position: relative;
+}
+
+.person-chip:hover {
+  border-color: rgba(0, 0, 0, 0.22);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+  background: #ffffff;
+}
+
+.person-chip.receivable {
+  border-left: 3.5px solid var(--tesla-green);
+}
+
+.person-chip.payable {
+  border-left: 3.5px solid var(--tesla-red);
+}
+
+.person-chip.settled {
+  border-left: 3.5px solid var(--tesla-pewter);
+  opacity: 0.8;
+}
+
+.person-chip-avatar {
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  font-weight: 700;
+  color: #ffffff;
+  flex-shrink: 0;
+  letter-spacing: 0.02em;
+}
+
+.person-chip-info {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  min-width: 0;
+  flex: 1;
+}
+
+.person-chip-name {
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--tesla-black);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.person-chip-sub {
+  font-size: 11.5px;
+  color: var(--tesla-pewter);
+  font-weight: 500;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  margin-top: 1px;
+}
+
+.person-chip.receivable .person-chip-sub {
+  color: #006644;
+  font-weight: 600;
+}
+
+.person-chip.payable .person-chip-sub {
+  color: #bf2600;
+  font-weight: 600;
+}
+
+.person-chip-filter-hint {
+  font-size: 12px;
+  opacity: 0.35;
+  transition: opacity var(--ease), transform var(--ease);
+  flex-shrink: 0;
+}
+
+.person-chip:hover .person-chip-filter-hint {
+  opacity: 1;
+  transform: scale(1.1);
+}
+
+/* ───────── Dues Filter Row ───────── */
+.filter-row-dues {
+  display: grid;
+  grid-template-columns: 2fr 1.25fr 1.25fr 1.25fr;
+  gap: 0.75rem;
+  align-items: center;
+}
+
+.dues-count-pill {
+  font-size: 12px;
+  font-weight: 600;
+  padding: 0.25rem 0.65rem;
+  border-radius: var(--radius-pill);
+  background: var(--tesla-fill);
+  color: var(--tesla-pewter);
+  border: 1px solid var(--tesla-line);
+}
+
+/* ───────── Dues History Stream ───────── */
+.dues-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.due-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 1.15rem 1.25rem;
+  background: var(--tesla-fill);
+  border: 1px solid var(--tesla-line);
+  border-radius: var(--radius-md);
+  transition: all var(--ease);
+  gap: 1rem;
+}
+
+.due-item:hover {
+  border-color: rgba(0, 0, 0, 0.18);
+  background: #ffffff;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.04);
+}
+
+.due-item.settled-item {
+  opacity: 0.65;
+  background: rgba(0, 0, 0, 0.015);
+}
+
+.due-item.settled-item:hover {
+  opacity: 0.95;
+}
+
+.due-left {
+  display: flex;
+  align-items: center;
+  gap: 0.95rem;
+  min-width: 0;
+  flex: 1;
+}
+
+.due-avatar {
+  width: 42px;
+  height: 42px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 13.5px;
+  font-weight: 700;
+  color: #ffffff;
+  flex-shrink: 0;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.08);
+}
+
+.due-info {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  min-width: 0;
+  flex: 1;
+}
+
+.due-top-line {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.due-person {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--tesla-black);
+}
+
+.due-type-badge {
+  font-size: 11px;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: var(--radius-pill);
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.due-type-badge.lent {
+  background: rgba(0, 135, 90, 0.1);
+  color: #006644;
+}
+
+.due-type-badge.borrowed {
+  background: rgba(222, 53, 11, 0.1);
+  color: #bf2600;
+}
+
+/* ───────── Settlement Deadline Badges ───────── */
+.deadline-pill {
+  font-size: 11px;
+  font-weight: 500;
+  padding: 2px 8px;
+  border-radius: var(--radius-pill);
+  background: var(--tesla-line);
+  color: var(--tesla-pewter);
+}
+
+.deadline-pill.overdue {
+  background: rgba(222, 53, 11, 0.14);
+  color: #bf2600;
+  font-weight: 600;
+  animation: pulseOverdue 2s infinite ease-in-out;
+}
+
+@keyframes pulseOverdue {
+  0%, 100% {
+    box-shadow: 0 0 0 0 rgba(222, 53, 11, 0.3);
+  }
+  50% {
+    box-shadow: 0 0 0 4px rgba(222, 53, 11, 0.08);
+  }
+}
+
+.deadline-pill.today {
+  background: rgba(245, 158, 11, 0.18);
+  color: #b45309;
+  font-weight: 600;
+}
+
+.deadline-pill.soon {
+  background: rgba(62, 106, 225, 0.12);
+  color: var(--tesla-blue);
+  font-weight: 500;
+}
+
+.deadline-pill.settled {
+  background: rgba(0, 0, 0, 0.04);
+  color: var(--tesla-pewter);
+}
+
+.due-desc {
+  font-size: 13px;
+  color: var(--tesla-pewter);
+  word-break: break-word;
+}
+
+.due-meta {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  font-size: 11.5px;
+  color: #88888b;
+  flex-wrap: wrap;
+  margin-top: 2px;
+}
+
+.settled-date-meta {
+  color: #006644;
+  font-weight: 600;
+  background: rgba(0, 135, 90, 0.08);
+  padding: 1px 6px;
+  border-radius: 4px;
+}
+
+/* ───────── Dues Right Side (Amount & Actions) ───────── */
+.due-right {
+  display: flex;
+  align-items: center;
+  gap: 1.15rem;
+  flex-shrink: 0;
+}
+
+.due-amount-block {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 2px;
+}
+
+.due-amount {
+  font-size: 16.5px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+
+.due-amount.income {
+  color: var(--tesla-green);
+}
+
+.due-amount.expense {
+  color: var(--tesla-red);
+}
+
+.due-status-chip {
+  font-size: 11px;
+  font-weight: 600;
+  padding: 2px 7px;
+  border-radius: var(--radius-pill);
+}
+
+.due-status-chip.pending {
+  background: rgba(245, 158, 11, 0.12);
+  color: #b45309;
+}
+
+.due-status-chip.settled {
+  background: rgba(0, 135, 90, 0.12);
+  color: #006644;
+}
+
+.due-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+}
+
+.btn-action-settle {
+  padding: 0.38rem 0.8rem;
+  font-size: 12px;
+  font-weight: 600;
+  border-radius: var(--radius-pill);
+  background: var(--tesla-black);
+  color: #ffffff;
+  border: none;
+  cursor: pointer;
+  transition: all var(--ease);
+  font-family: var(--font-main);
+}
+
+.btn-action-settle:hover {
+  background: #333333;
+  transform: translateY(-1px);
+}
+
+.btn-action-settle.reopen {
+  background: var(--tesla-fill);
+  color: var(--tesla-pewter);
+  border: 1px solid var(--tesla-line);
+}
+
+.btn-action-settle.reopen:hover {
+  color: var(--tesla-black);
+  border-color: rgba(0, 0, 0, 0.3);
+}
+
+.btn-action-remind {
+  padding: 0.38rem 0.8rem;
+  font-size: 12px;
+  font-weight: 500;
+  border-radius: var(--radius-pill);
+  background: rgba(37, 211, 102, 0.12);
+  color: #075e54;
+  border: 1px solid rgba(37, 211, 102, 0.35);
+  cursor: pointer;
+  transition: all var(--ease);
+  font-family: var(--font-main);
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.btn-action-remind:hover {
+  background: #25d366;
+  color: #ffffff;
+  border-color: #25d366;
+  transform: translateY(-1px);
+}
+
+.btn-action-delete {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  border: none;
+  background: transparent;
+  color: var(--tesla-pewter);
+  font-size: 18px;
+  line-height: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all var(--ease);
+}
+
+.btn-action-delete:hover {
+  background: rgba(222, 53, 11, 0.12);
+  color: var(--tesla-red);
+}
+
+/* ───────── Dues Table Telemetry Styling ───────── */
+.dues-table {
+  min-width: 740px;
+}
+
+.due-row {
+  transition: background-color 160ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.due-person-cell {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  white-space: nowrap;
+}
+
+.due-person-cell .due-avatar {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11.5px;
+  font-weight: 700;
+  color: #ffffff;
+  flex-shrink: 0;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.08);
+}
+
+.due-person-cell .due-person {
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--tesla-black);
+}
+
+.due-dates-cell {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  font-size: 12px;
+  color: var(--tesla-pewter);
+  white-space: nowrap;
+}
+
+.due-date-given {
+  font-feature-settings: "tnum";
+}
+
+.due-deadline-wrap {
+  display: inline-flex;
+}
+
+.due-amount-cell {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 0.15rem;
+}
+
+.due-amount-cell .due-amount {
+  font-size: 14.5px;
+  font-weight: 600;
+  font-feature-settings: "tnum";
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.due-amount-cell .due-amount-sub {
+  font-size: 10.5px;
+  color: var(--tesla-pewter);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.settled-row {
+  opacity: 0.65;
+  background: rgba(0, 0, 0, 0.015);
+}
+
+.settled-row:hover {
+  opacity: 0.95;
+}
+
+.ai-help-list {
+  margin: 0.45rem 0 0 1.15rem;
+  padding: 0;
+  font-size: 12.5px;
+  color: var(--tesla-pewter);
+}
+
+.ai-help-list li {
+  margin-bottom: 3px;
+}
+
+/* ───────── Responsive Dues Layouts ───────── */
+@media (max-width: 768px) {
+  .filter-row-dues {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .type-toggle-group {
+    flex-direction: column;
+  }
+}
+
+@media (max-width: 560px) {
+  .filter-row-dues {
+    grid-template-columns: 1fr;
+  }
+
+  .due-item {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0.85rem;
+  }
+
+  .due-right {
+    justify-content: space-between;
+    width: 100%;
+    border-top: 1px solid var(--tesla-line);
+    padding-top: 0.75rem;
+  }
+
+  .due-amount-block {
+    align-items: flex-start;
+  }
+
+  .people-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* ───────── Personal Expenses & Budget Overview Card (Tesla Minimalist) ───────── */
+.expense-hub-card,
+.cool-hub-box {
+  display: flex;
+  flex-direction: column;
+  gap: 1.35rem;
+  background: var(--tesla-surface);
+  border: 1px solid var(--tesla-line);
+  border-radius: var(--radius-lg);
+  padding: 1.85rem;
+  box-shadow: var(--shadow-card);
+  transition: border-color var(--ease), box-shadow var(--ease);
+}
+
+.expense-hub-card:hover,
+.cool-hub-box:hover {
+  border-color: rgba(0, 0, 0, 0.14);
+  box-shadow: var(--shadow-card-hover);
+}
+
+.hub-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1.25rem;
+  flex-wrap: wrap;
+}
+
+.hub-header-text {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.hub-badge-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.hub-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  font-size: 0.72rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--tesla-pewter);
+  background: var(--tesla-fill);
+  border: 1px solid rgba(0, 0, 0, 0.05);
+  padding: 0.2rem 0.65rem;
+  border-radius: var(--radius-pill);
+}
+
+.hub-caption {
+  font-size: 0.82rem;
+  color: var(--tesla-pewter);
+}
+
+.hub-title {
+  margin: 0;
+  font-size: 1.15rem;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  color: var(--tesla-black);
+}
+
+.btn-tesla-hub,
+.cool-hub-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.55rem;
+  padding: 0.55rem 1.25rem;
+  background: var(--tesla-fill);
+  color: var(--tesla-black);
+  border: 1px solid var(--tesla-line);
+  border-radius: var(--radius-pill);
+  font-size: 0.82rem;
+  font-weight: 550;
+  text-decoration: none;
+  transition: all var(--ease);
+  white-space: nowrap;
+}
+
+.btn-tesla-hub:hover,
+.cool-hub-btn:hover {
+  background: var(--tesla-black);
+  color: #ffffff;
+  border-color: var(--tesla-black);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 14px rgba(23, 26, 32, 0.16);
+}
+
+.btn-tesla-hub .btn-arrow,
+.cool-btn-arrow {
+  transition: transform var(--ease);
+}
+
+.btn-tesla-hub:hover .btn-arrow,
+.cool-hub-btn:hover .cool-btn-arrow {
+  transform: translateX(3px);
+}
+
+/* 3-Column Telemetry Metrics Grid */
+.hub-stats-grid,
+.cool-hub-stats {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 0.95rem;
+}
+
+.hub-metric-card,
+.hub-stat-pill {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  padding: 1.15rem 1.25rem;
+  border-radius: var(--radius-md);
+  background: var(--tesla-fill);
+  border: 1px solid var(--tesla-line-light);
+  transition: all var(--ease);
+}
+
+.hub-metric-card:hover,
+.hub-stat-pill:hover {
+  background: #ffffff;
+  border-color: rgba(0, 0, 0, 0.12);
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.03);
+}
+
+.hub-metric-label,
+.hub-stat-label {
+  font-size: 0.72rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--tesla-pewter);
+}
+
+.hub-metric-val,
+.hub-stat-val {
+  font-size: 1.35rem;
+  font-weight: 600;
+  font-feature-settings: "tnum";
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.02em;
+  color: var(--tesla-black);
+}
+
+.hub-metric-card.income .hub-metric-val,
+.hub-stat-pill.income .hub-stat-val {
+  color: var(--tesla-green);
+}
+
+.hub-metric-card.expense .hub-metric-val,
+.hub-stat-pill.expense .hub-stat-val {
+  color: var(--tesla-black);
+}
+
+.hub-metric-card.balance .hub-metric-val,
+.hub-stat-pill.balance .hub-stat-val {
+  color: var(--tesla-black);
+}
+
+@media (max-width: 640px) {
+  .hub-stats-grid,
+  .cool-hub-stats {
+    grid-template-columns: 1fr;
+    gap: 0.75rem;
+  }
+
+  .btn-tesla-hub,
+  .cool-hub-btn {
+    width: 100%;
+    justify-content: center;
+  }
+}

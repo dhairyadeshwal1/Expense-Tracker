@@ -679,10 +679,10 @@ function renderDuesList() {
       } else if (diffDays <= 7) {
         deadlineBadgeHtml = `<span class="deadline-pill soon" title="Settling soon">⏰ In ${diffDays}d</span>`;
       } else {
-        deadlineBadgeHtml = `<span class="deadline-pill" title="Settlement deadline">📅 Due: ${item.datePromised}</span>`;
+        deadlineBadgeHtml = `<span class="deadline-pill" title="Settlement deadline">📅 Due: ${escapeHtml(item.datePromised)}</span>`;
       }
     } else if (item.datePromised && item.settled) {
-      deadlineBadgeHtml = `<span class="deadline-pill settled">Promised: ${item.datePromised}</span>`;
+      deadlineBadgeHtml = `<span class="deadline-pill settled">Promised: ${escapeHtml(item.datePromised)}</span>`;
     }
 
     return `
@@ -703,9 +703,9 @@ function renderDuesList() {
         </td>
         <td class="col-dates">
           <div class="due-dates-cell">
-            <span class="due-date-given">📅 ${item.dateGiven}</span>
+            <span class="due-date-given">📅 ${escapeHtml(item.dateGiven)}</span>
             ${deadlineBadgeHtml ? `<div class="due-deadline-wrap">${deadlineBadgeHtml}</div>` : ""}
-            ${item.settled && item.settledAt ? `<span class="settled-date-meta">✓ Settled ${item.settledAt.slice(0, 10)}</span>` : ""}
+            ${item.settled && item.settledAt ? `<span class="settled-date-meta">✓ Settled ${escapeHtml(item.settledAt.slice(0, 10))}</span>` : ""}
           </div>
         </td>
         <td class="col-status">
@@ -723,7 +723,7 @@ function renderDuesList() {
           <div class="due-actions">
             <button
               class="btn btn-sm btn-action-settle ${item.settled ? "reopen" : ""}"
-              data-id="${item.id}"
+              data-id="${escapeHtml(item.id)}"
               title="${item.settled ? "Mark as unpaid" : "Mark as settled"}"
             >
               ${item.settled ? "↩ Reopen" : "✓ Settle"}
@@ -732,7 +732,7 @@ function renderDuesList() {
             ${!item.settled ? `
               <button
                 class="btn btn-sm btn-action-remind"
-                data-id="${item.id}"
+                data-id="${escapeHtml(item.id)}"
                 title="Copy friendly reminder message & share"
               >
                 💬 Remind
@@ -741,7 +741,7 @@ function renderDuesList() {
 
             <button
               class="btn-action-delete"
-              data-id="${item.id}"
+              data-id="${escapeHtml(item.id)}"
               title="Delete this record"
               aria-label="Delete"
             >

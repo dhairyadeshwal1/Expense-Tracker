@@ -309,9 +309,13 @@ function formatDate(dateStr) {
 }
 
 function escapeHtml(str) {
-  const div = document.createElement("div");
-  div.textContent = str || "";
-  return div.innerHTML;
+  if (!str) return "";
+  return String(str)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#039;");
 }
 
 let toastTimer = null;
@@ -538,7 +542,7 @@ function renderTransactions(animate = false) {
           </span>
         </td>
         <td class="col-actions text-right">
-          <button class="btn btn-delete btn-row-action" data-id="${t.id}" title="Delete transaction" aria-label="Delete">✕</button>
+          <button class="btn btn-delete btn-row-action" data-id="${escapeHtml(t.id)}" title="Delete transaction" aria-label="Delete">✕</button>
         </td>
       </tr>`
     )

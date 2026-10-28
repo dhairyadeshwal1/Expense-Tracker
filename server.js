@@ -6,10 +6,83 @@ const crypto = require("crypto");
 const { Pool } = require("pg");
 
 const PORT = process.env.PORT || 3000;
-const JWT_SECRET = process.env.JWT_SECRET || "student_expense_tracker_secret_2026";
-const DB_URL =
-  process.env.DATABASE_URL ||
-  "postgresql://postgres.qmpfbgdcxuinrvpgnxju:expensetracker12312@aws-0-ap-northeast-1.pooler.supabase.com:6543/postgres";
+const DB_URL = process.env.DATABASE_URL;
+
+if (!DB_URL) {
+  console.warn("⚠️ WARNING: DATABASE_URL is not set. Check your .env file.");
+}
+
+const JWT_SECRET = process.env.JWT_SECRET || (() => {
+  console.warn("⚠️ WARNING: JWT_SECRET not found in environment. Generating an ephemeral cryptographic secret.");
+  return crypto.randomBytes(32).toString("hex");
+})();
+
+// ─── Security Headers & CORS ─────────────────────────────
+const SECURITY_HEADERS = {
+  "X-Content-Type-Options": "nosniff",
+  "X-Frame-Options": "DENY",
+  "X-XSS-Protection": "0",
+  "Referrer-Policy": "strict-origin-when-cross-origin",
+  "Permissions-Policy": "camera=(), microphone=(), geolocation=(), payment=()",
+  "Content-Security-Policy":
+    "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com data:; img-src 'self' data: https:; connect-src 'self' http: https: ws: wss:; frame-ancestors 'none'; base-uri 'self'; form-action 'self';",
+  "Strict-Transport-Security": "max-age=31536000; includeSubDomains",
+  "Cross-Origin-Opener-Policy": "same-origin",
+  "Cross-Origin-Resource-Policy": "same-origin",
+};
+
+function getCorsHeaders(req) {
+  const origin = req && req.headers ? req.headers["origin"] || "*" : "*";
+  return {
+    "Access-Control-Allow-Origin": origin,
+    "Access-Control-Allow-Methods": "GET, POST, DELETE, OPTIONS",
+    "Access-Control-Allow-Headers": "Content-Type, Authorization",
+    "Access-Control-Max-Age": "86400",
+  };
+}
+
+// ─── Rate Limiter (In-Memory Sliding Window) ─────────────
+const rateLimits = new Map();
+
+function checkRateLimit(key, maxRequests, windowMs) {
+  const now = Date.now();
+  let record = rateLimits.get(key);
+  if (!record || now > record.resetTime) {
+    record = { count: 1, resetTime: now + windowMs };
+    rateLimits.set(key, record);
+    return { allowed: true, remaining: maxRequests - 1, resetIn: Math.ceil(windowMs / 1000) };
+  }
+  record.count++;
+  if (record.count > maxRequests) {
+    return { allowed: false, remaining: 0, resetIn: Math.ceil((record.resetTime - now) / 1000) };
+  }
+  return { allowed: true, remaining: maxRequests - record.count, resetIn: Math.ceil((record.resetTime - now) / 1000) };
+}
+
+// Purge expired rate-limit records every 5 minutes
+setInterval(() => {
+  const now = Date.now();
+  for (const [key, record] of rateLimits.entries()) {
+    if (now > record.resetTime) rateLimits.delete(key);
+  }
+}, 5 * 60 * 1000).unref();
+
+function getClientIp(req) {
+  const forwarded = req && req.headers ? req.headers["x-forwarded-for"] : null;
+  if (typeof forwarded === "string" && forwarded) {
+    return forwarded.split(",")[0].trim();
+  }
+  return (req && req.socket && req.socket.remoteAddress) ? req.socket.remoteAddress : "127.0.0.1";
+}
+
+// ─── Constant-Time Comparison (Timing Attack Protection) ──
+function timingSafeEqualStr(a, b) {
+  if (typeof a !== "string" || typeof b !== "string") return false;
+  const bufA = Buffer.from(a);
+  const bufB = Buffer.from(b);
+  if (bufA.length !== bufB.length) return false;
+  return crypto.timingSafeEqual(bufA, bufB);
+}
 
 // ─── Native JWT ──────────────────────────────────────────
 function base64Url(str) {
@@ -32,7 +105,7 @@ function signJwt(payload, expiresInDays = 60) {
 }
 
 function verifyJwt(token) {
-  if (!token) return null;
+  if (!token || typeof token !== "string") return null;
   const parts = token.split(".");
   if (parts.length !== 3) return null;
   const [header, payload, signature] = parts;
@@ -40,7 +113,7 @@ function verifyJwt(token) {
     .createHmac("sha256", JWT_SECRET)
     .update(`${header}.${payload}`)
     .digest("base64url");
-  if (signature !== expected) return null;
+  if (!timingSafeEqualStr(signature, expected)) return null;
   try {
     const decoded = JSON.parse(Buffer.from(payload, "base64url").toString());
     if (decoded.exp && decoded.exp < Math.floor(Date.now() / 1000)) return null;
@@ -58,26 +131,34 @@ function hashPassword(password) {
 }
 
 function verifyPassword(password, stored) {
-  if (!stored) return false;
+  if (!stored || typeof stored !== "string") return false;
   if (stored.startsWith("scrypt:")) {
-    const [, salt, key] = stored.split(":");
+    const parts = stored.split(":");
+    if (parts.length !== 3) return false;
+    const [, salt, key] = parts;
+    if (!salt || !key) return false;
     const hash = crypto.scryptSync(password, salt, 64).toString("hex");
-    return hash === key;
+    return timingSafeEqualStr(hash, key);
   }
   return false;
 }
 
 // ─── PostgreSQL Database ─────────────────────────────────
-const pool = new Pool({
-  connectionString: DB_URL,
-  ssl: { rejectUnauthorized: false },
-});
+const pool = new Pool(
+  DB_URL
+    ? {
+        connectionString: DB_URL,
+        ssl: { rejectUnauthorized: false },
+      }
+    : {}
+);
 
 pool.on("error", (err) => {
   console.error("Database idle client error:", err.message);
 });
 
 async function initDb() {
+  if (!DB_URL) return;
   try {
     await pool.query(`
       CREATE TABLE IF NOT EXISTS public.users (
@@ -116,32 +197,52 @@ function broadcastSync(userId) {
   if (sseClients.has(userId)) {
     const payload = `data: ${JSON.stringify({ event: "sync", timestamp: Date.now() })}\n\n`;
     for (const client of sseClients.get(userId)) {
-      client.write(payload);
+      try { client.write(payload); } catch (e) {}
     }
   }
 }
 
-// ─── Request Body Helper ─────────────────────────────────
+// ─── Request Body Helper (Protected against DoS / Memory Bombs) ─
+const MAX_BODY_SIZE = 256 * 1024; // 256 KB max payload
+
 function parseBody(req) {
-  return new Promise((resolve) => {
+  return new Promise((resolve, reject) => {
     let body = "";
-    req.on("data", (chunk) => (body += chunk));
-    req.on("end", () => {
-      try {
-        resolve(JSON.parse(body || "{}"));
-      } catch (e) {
-        resolve({});
+    let receivedBytes = 0;
+
+    req.on("data", (chunk) => {
+      receivedBytes += chunk.length;
+      if (receivedBytes > MAX_BODY_SIZE) {
+        req.destroy();
+        reject(new Error("PAYLOAD_TOO_LARGE"));
+        return;
       }
+      body += chunk;
+    });
+
+    req.on("end", () => {
+      if (!body.trim()) return resolve({});
+      try {
+        resolve(JSON.parse(body));
+      } catch (e) {
+        reject(new Error("INVALID_JSON"));
+      }
+    });
+
+    req.on("error", (err) => {
+      reject(err);
     });
   });
 }
 
-function sendJson(res, statusCode, data) {
+function sendJson(res, statusCode, data, extraHeaders = {}) {
   res.writeHead(statusCode, {
-    "Content-Type": "application/json",
+    "Content-Type": "application/json; charset=UTF-8",
+    ...SECURITY_HEADERS,
     "Access-Control-Allow-Origin": "*",
     "Access-Control-Allow-Methods": "GET, POST, DELETE, OPTIONS",
     "Access-Control-Allow-Headers": "Content-Type, Authorization",
+    ...extraHeaders,
   });
   res.end(JSON.stringify(data));
 }
@@ -517,19 +618,29 @@ const MIME_TYPES = {
   ".ico": "image/x-icon",
 };
 
+const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const DATE_REGEX = /^\d{4}-\d{2}-\d{2}$/;
+
 const server = http.createServer(async (req, res) => {
-  // CORS Preflight
+  // Global CORS Preflight
   if (req.method === "OPTIONS") {
     res.writeHead(204, {
-      "Access-Control-Allow-Origin": "*",
-      "Access-Control-Allow-Methods": "GET, POST, DELETE, OPTIONS",
-      "Access-Control-Allow-Headers": "Content-Type, Authorization",
+      ...SECURITY_HEADERS,
+      ...getCorsHeaders(req),
     });
     return res.end();
   }
 
-  const url = new URL(req.url, `http://localhost:${PORT}`);
+  let url;
+  try {
+    url = new URL(req.url, `http://localhost:${PORT}`);
+  } catch (err) {
+    res.writeHead(400, { "Content-Type": "text/plain", ...SECURITY_HEADERS });
+    return res.end("Bad Request");
+  }
+
   const pathname = url.pathname;
+  const clientIp = getClientIp(req);
 
   // ─── SSE Stream ───
   if (pathname === "/api/events" && req.method === "GET") {
@@ -540,14 +651,18 @@ const server = http.createServer(async (req, res) => {
       "Content-Type": "text/event-stream",
       "Cache-Control": "no-cache",
       Connection: "keep-alive",
-      "Access-Control-Allow-Origin": "*",
+      ...SECURITY_HEADERS,
+      ...getCorsHeaders(req),
     });
     res.write("data: connected\n\n");
 
     if (!sseClients.has(userId)) sseClients.set(userId, new Set());
     sseClients.get(userId).add(res);
 
-    const hb = setInterval(() => res.write(": heartbeat\n\n"), 25000);
+    const hb = setInterval(() => {
+      try { res.write(": heartbeat\n\n"); } catch (e) {}
+    }, 25000);
+
     req.on("close", () => {
       clearInterval(hb);
       if (sseClients.has(userId)) {
@@ -560,43 +675,91 @@ const server = http.createServer(async (req, res) => {
 
   // ─── API Routes ───
   if (pathname.startsWith("/api/")) {
-    // Register
+    // General API Rate Limit: 180 req / min per IP
+    const apiLim = checkRateLimit(`api:${clientIp}`, 180, 60 * 1000);
+    if (!apiLim.allowed) {
+      return sendJson(res, 429, { error: "Too many API requests. Please slow down." }, { "Retry-After": String(apiLim.resetIn) });
+    }
+
+    // Helper to safely parse body
+    const getSafeBody = async () => {
+      try {
+        return await parseBody(req);
+      } catch (err) {
+        if (err.message === "PAYLOAD_TOO_LARGE") {
+          sendJson(res, 413, { error: "Payload too large. Max size is 256KB." });
+        } else {
+          sendJson(res, 400, { error: "Malformed JSON payload." });
+        }
+        return null;
+      }
+    };
+
+    // ─── Register ───
     if (pathname === "/api/auth/register" && req.method === "POST") {
-      const { email, password, name, initialTransactions, initialBudget } = await parseBody(req);
-      if (!email || !password || password.length < 4) {
-        return sendJson(res, 400, { error: "Valid email and password (min 4 chars) required." });
+      const authLim = checkRateLimit(`auth:${clientIp}`, 10, 60 * 1000);
+      if (!authLim.allowed) {
+        return sendJson(res, 429, { error: "Too many registration attempts. Please wait 1 minute." }, { "Retry-After": String(authLim.resetIn) });
+      }
+
+      const body = await getSafeBody();
+      if (!body) return;
+
+      const { email, password, name, initialTransactions, initialBudget } = body;
+      if (!email || typeof email !== "string" || !EMAIL_REGEX.test(email.trim()) || email.length > 255) {
+        return sendJson(res, 400, { error: "A valid email address (max 255 characters) is required." });
+      }
+      if (!password || typeof password !== "string" || password.length < 6 || password.length > 128) {
+        return sendJson(res, 400, { error: "Password must be between 6 and 128 characters." });
       }
 
       const normalizedEmail = email.toLowerCase().trim();
+      const sanitizedName = typeof name === "string" && name.trim() ? name.trim().slice(0, 100) : normalizedEmail.split("@")[0].slice(0, 100);
+      const budgetVal = typeof initialBudget === "number" && Number.isFinite(initialBudget) && initialBudget >= 0 && initialBudget <= 1000000000 ? initialBudget : 0;
+
       try {
-        const existing = await pool.query("SELECT id FROM public.users WHERE email = $1", [
-          normalizedEmail,
-        ]);
+        const existing = await pool.query("SELECT id FROM public.users WHERE email = $1", [normalizedEmail]);
         if (existing.rows.length > 0) {
-          return sendJson(res, 409, { error: "Account with this email already exists. Please Sign In." });
+          return sendJson(res, 409, { error: "An account with this email already exists. Please Sign In." });
         }
 
         const passwordHash = hashPassword(password);
-        const displayName = name && name.trim() ? name.trim() : normalizedEmail.split("@")[0];
-        const budgetVal = typeof initialBudget === "number" ? initialBudget : 0;
-
         const result = await pool.query(
           `INSERT INTO public.users (name, email, password_hash, budget)
            VALUES ($1, $2, $3, $4)
            RETURNING id, name, email, budget, created_at`,
-          [displayName, normalizedEmail, passwordHash, budgetVal]
+          [sanitizedName, normalizedEmail, passwordHash, budgetVal]
         );
         const user = result.rows[0];
 
         if (Array.isArray(initialTransactions) && initialTransactions.length > 0) {
-          for (const t of initialTransactions) {
-            if (t.description && t.amount && t.type && t.category && t.date) {
-              const txnId = t.id || Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
+          for (const t of initialTransactions.slice(0, 500)) {
+            const numAmount = parseFloat(t.amount);
+            if (
+              t.description &&
+              typeof t.description === "string" &&
+              Number.isFinite(numAmount) &&
+              numAmount > 0 &&
+              (t.type === "income" || t.type === "expense") &&
+              t.category &&
+              t.date &&
+              DATE_REGEX.test(String(t.date).slice(0, 10))
+            ) {
+              const txnId = typeof t.id === "string" && t.id.length <= 64 ? t.id : Date.now().toString(36) + crypto.randomBytes(4).toString("hex");
               await pool.query(
                 `INSERT INTO public.transactions (id, user_id, created_by, description, amount, type, category, date)
                  VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
                  ON CONFLICT (id) DO NOTHING`,
-                [txnId, user.id, user.name, t.description, t.amount, t.type, t.category, t.date]
+                [
+                  txnId,
+                  user.id,
+                  user.name,
+                  String(t.description).trim().slice(0, 200),
+                  numAmount,
+                  t.type,
+                  String(t.category).trim().slice(0, 64),
+                  String(t.date).slice(0, 10),
+                ]
               );
             }
           }
@@ -608,15 +771,23 @@ const server = http.createServer(async (req, res) => {
           user: { id: user.id, email: user.email, name: user.name, budget: Number(user.budget) || 0 },
         });
       } catch (err) {
-        console.error("Register error:", err);
-        return sendJson(res, 500, { error: "Failed to create account." });
+        console.error("Register error:", err.message);
+        return sendJson(res, 500, { error: "Failed to create account. Please try again." });
       }
     }
 
-    // Login
+    // ─── Login ───
     if (pathname === "/api/auth/login" && req.method === "POST") {
-      const { email, password } = await parseBody(req);
-      if (!email || !password) {
+      const authLim = checkRateLimit(`auth:${clientIp}`, 10, 60 * 1000);
+      if (!authLim.allowed) {
+        return sendJson(res, 429, { error: "Too many login attempts. Please wait 1 minute." }, { "Retry-After": String(authLim.resetIn) });
+      }
+
+      const body = await getSafeBody();
+      if (!body) return;
+
+      const { email, password } = body;
+      if (!email || !password || typeof email !== "string" || typeof password !== "string" || email.length > 255 || password.length > 128) {
         return sendJson(res, 400, { error: "Email and password are required." });
       }
 
@@ -627,11 +798,11 @@ const server = http.createServer(async (req, res) => {
           [normalizedEmail]
         );
         if (result.rows.length === 0) {
-          return sendJson(res, 401, { error: "No account found with this email." });
+          return sendJson(res, 401, { error: "Invalid email or password." });
         }
         const user = result.rows[0];
         if (!verifyPassword(password, user.password_hash)) {
-          return sendJson(res, 401, { error: "Incorrect password." });
+          return sendJson(res, 401, { error: "Invalid email or password." });
         }
 
         const token = signJwt({ id: user.id, email: user.email, name: user.name });
@@ -640,12 +811,12 @@ const server = http.createServer(async (req, res) => {
           user: { id: user.id, email: user.email, name: user.name, budget: Number(user.budget) || 0 },
         });
       } catch (err) {
-        console.error("Login error:", err);
-        return sendJson(res, 500, { error: "Server error during login." });
+        console.error("Login error:", err.message);
+        return sendJson(res, 500, { error: "Server error during authentication." });
       }
     }
 
-    // Auth Me
+    // ─── Auth Me ───
     if (pathname === "/api/auth/me" && req.method === "GET") {
       const user = getUserFromReq(req);
       if (!user) return sendJson(res, 401, { error: "Unauthorized" });
@@ -660,11 +831,11 @@ const server = http.createServer(async (req, res) => {
           user: { id: dbUser.id, name: dbUser.name, email: dbUser.email, budget: Number(dbUser.budget) || 0 },
         });
       } catch (err) {
-        return sendJson(res, 500, { error: "Failed to fetch user" });
+        return sendJson(res, 500, { error: "Failed to fetch user data" });
       }
     }
 
-    // Data (Per-User Centralized Transactions & Budget)
+    // ─── Data (Centralized Transactions & Budget) ───
     if (pathname === "/api/data" && req.method === "GET") {
       const user = getUserFromReq(req);
       if (!user) {
@@ -683,53 +854,74 @@ const server = http.createServer(async (req, res) => {
         const budget = userResult.rows.length > 0 && userResult.rows[0].budget != null ? Number(userResult.rows[0].budget) : 0;
         return sendJson(res, 200, { transactions: txnResult.rows, budget, guest: false });
       } catch (err) {
-        console.error("Data error:", err);
+        console.error("Data error:", err.message);
         return sendJson(res, 500, { error: "Failed to load transactions" });
       }
     }
 
-    // Add Transaction
+    // ─── Add Transaction ───
     if (pathname === "/api/transactions" && req.method === "POST") {
       const user = getUserFromReq(req);
       if (!user) return sendJson(res, 401, { error: "Please sign in to add transactions" });
 
-      const { id, description, amount, type, category, date } = await parseBody(req);
-      if (!description || !amount || !type || !category || !date) {
-        return sendJson(res, 400, { error: "All fields are required" });
+      const body = await getSafeBody();
+      if (!body) return;
+
+      const { id, description, amount, type, category, date } = body;
+      const numAmount = parseFloat(amount);
+
+      if (!description || typeof description !== "string" || !description.trim() || description.trim().length > 200) {
+        return sendJson(res, 400, { error: "Description is required (max 200 characters)" });
+      }
+      if (!Number.isFinite(numAmount) || numAmount <= 0 || numAmount > 1000000000) {
+        return sendJson(res, 400, { error: "Valid positive amount is required" });
+      }
+      if (type !== "income" && type !== "expense") {
+        return sendJson(res, 400, { error: "Type must be income or expense" });
+      }
+      if (!category || typeof category !== "string" || category.trim().length > 64) {
+        return sendJson(res, 400, { error: "Category is required (max 64 characters)" });
+      }
+      if (!date || typeof date !== "string" || !DATE_REGEX.test(date.slice(0, 10))) {
+        return sendJson(res, 400, { error: "Valid date format (YYYY-MM-DD) is required" });
       }
 
-      const txnId = id || Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
+      const txnId = typeof id === "string" && id.length <= 64 ? id : Date.now().toString(36) + crypto.randomBytes(4).toString("hex");
       try {
         const result = await pool.query(
           `INSERT INTO public.transactions (id, user_id, created_by, description, amount, type, category, date)
            VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
            RETURNING id, user_id, created_by, description, amount::float, type, category, date, created_at`,
-          [txnId, user.id, user.name || user.email, description, amount, type, category, date]
+          [txnId, user.id, (user.name || user.email).slice(0, 100), description.trim().slice(0, 200), numAmount, type, category.trim().slice(0, 64), date.slice(0, 10)]
         );
         broadcastSync(user.id);
         return sendJson(res, 201, result.rows[0]);
       } catch (err) {
-        console.error("Add transaction error:", err);
+        console.error("Add transaction error:", err.message);
         return sendJson(res, 500, { error: "Failed to save transaction" });
       }
     }
 
-    // Delete Single Transaction
+    // ─── Delete Single Transaction ───
     if (pathname.startsWith("/api/transactions/") && req.method === "DELETE") {
       const user = getUserFromReq(req);
       if (!user) return sendJson(res, 401, { error: "Unauthorized" });
 
-      const txnId = pathname.replace("/api/transactions/", "");
+      const txnId = pathname.replace("/api/transactions/", "").trim();
+      if (!txnId || txnId.length > 64) {
+        return sendJson(res, 400, { error: "Invalid transaction ID" });
+      }
+
       try {
         await pool.query("DELETE FROM public.transactions WHERE id = $1 AND user_id = $2", [txnId, user.id]);
         broadcastSync(user.id);
         return sendJson(res, 200, { success: true });
       } catch (err) {
-        return sendJson(res, 500, { error: "Failed to delete" });
+        return sendJson(res, 500, { error: "Failed to delete transaction" });
       }
     }
 
-    // Clear All Transactions
+    // ─── Clear All Transactions ───
     if (pathname === "/api/transactions" && req.method === "DELETE") {
       const user = getUserFromReq(req);
       if (!user) return sendJson(res, 401, { error: "Unauthorized" });
@@ -739,24 +931,27 @@ const server = http.createServer(async (req, res) => {
         broadcastSync(user.id);
         return sendJson(res, 200, { success: true });
       } catch (err) {
-        return sendJson(res, 500, { error: "Failed to clear" });
+        return sendJson(res, 500, { error: "Failed to clear transactions" });
       }
     }
 
-    // Update Budget
+    // ─── Update Budget ───
     if (pathname === "/api/budget" && req.method === "POST") {
       const user = getUserFromReq(req);
       if (!user) return sendJson(res, 401, { error: "Unauthorized" });
 
-      const { budget } = await parseBody(req);
-      if (budget == null || isNaN(budget) || budget < 0) {
-        return sendJson(res, 400, { error: "Invalid budget value" });
+      const body = await getSafeBody();
+      if (!body) return;
+
+      const numBudget = parseFloat(body.budget);
+      if (!Number.isFinite(numBudget) || numBudget < 0 || numBudget > 1000000000) {
+        return sendJson(res, 400, { error: "Valid non-negative budget value is required" });
       }
 
       try {
-        await pool.query("UPDATE public.users SET budget = $1 WHERE id = $2", [budget, user.id]);
+        await pool.query("UPDATE public.users SET budget = $1 WHERE id = $2", [numBudget, user.id]);
         broadcastSync(user.id);
-        return sendJson(res, 200, { success: true, budget });
+        return sendJson(res, 200, { success: true, budget: numBudget });
       } catch (err) {
         return sendJson(res, 500, { error: "Failed to update budget" });
       }
@@ -764,17 +959,22 @@ const server = http.createServer(async (req, res) => {
 
     // ─── AI Financial Assistant Chat Endpoint ───
     if (pathname === "/api/ai/chat" && req.method === "POST") {
-      const user = getUserFromReq(req);
-      const body = await parseBody(req);
-      const message = (body.message || "").trim();
-
-      if (!message) {
-        return sendJson(res, 400, { error: "Message is required" });
+      const aiLim = checkRateLimit(`ai:${clientIp}`, 30, 60 * 1000);
+      if (!aiLim.allowed) {
+        return sendJson(res, 429, { error: "AI rate limit reached. Please wait a moment." }, { "Retry-After": String(aiLim.resetIn) });
       }
 
-      // Fetch user's live data if authenticated, else use provided client state
+      const user = getUserFromReq(req);
+      const body = await getSafeBody();
+      if (!body) return;
+
+      const rawMsg = typeof body.message === "string" ? body.message.trim() : "";
+      if (!rawMsg || rawMsg.length > 1500) {
+        return sendJson(res, 400, { error: "A message under 1500 characters is required" });
+      }
+
       let txns = Array.isArray(body.transactions) ? body.transactions : [];
-      let currentBudget = typeof body.budget === "number" ? body.budget : 0;
+      let currentBudget = typeof body.budget === "number" && Number.isFinite(body.budget) ? body.budget : 0;
 
       if (user) {
         try {
@@ -792,9 +992,9 @@ const server = http.createServer(async (req, res) => {
         }
       }
 
-      const response = await handleAiChat(message, txns, currentBudget, user);
+      const response = await handleAiChat(rawMsg, txns, currentBudget, user);
 
-      // If an action was executed on the server (like adding a transaction or updating budget)
+      // Execute action on server if user is logged in
       if (response.action && user) {
         if (response.action.type === "add_transaction") {
           try {
@@ -803,12 +1003,12 @@ const server = http.createServer(async (req, res) => {
               `INSERT INTO public.transactions (id, user_id, created_by, description, amount, type, category, date)
                VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
                RETURNING id, user_id, created_by, description, amount::float, type, category, date, created_at`,
-              [t.id, user.id, user.name || user.email, t.description, t.amount, t.type, t.category, t.date]
+              [t.id, user.id, (user.name || user.email).slice(0, 100), t.description.slice(0, 200), t.amount, t.type, t.category.slice(0, 64), t.date.slice(0, 10)]
             );
             response.action.payload = insertRes.rows[0];
             broadcastSync(user.id);
           } catch (e) {
-            console.error("AI auto-insert txn error:", e);
+            console.error("AI auto-insert txn error:", e.message);
           }
         } else if (response.action.type === "set_budget") {
           try {
@@ -816,7 +1016,7 @@ const server = http.createServer(async (req, res) => {
             await pool.query("UPDATE public.users SET budget = $1 WHERE id = $2", [newBudget, user.id]);
             broadcastSync(user.id);
           } catch (e) {
-            console.error("AI auto-set budget error:", e);
+            console.error("AI auto-set budget error:", e.message);
           }
         }
       }
@@ -827,32 +1027,99 @@ const server = http.createServer(async (req, res) => {
     return sendJson(res, 404, { error: "Endpoint not found" });
   }
 
-  // ─── Static File Serving ───
-  let filePath = path.join(__dirname, pathname === "/" ? "index.html" : pathname);
-  const ext = path.extname(filePath).toLowerCase();
-  const contentType = MIME_TYPES[ext] || "application/octet-stream";
+  // ─── Static File Serving with Path Traversal & Leakage Protection ───
+  if (req.method !== "GET" && req.method !== "HEAD") {
+    res.writeHead(405, { "Content-Type": "text/plain", ...SECURITY_HEADERS });
+    return res.end("Method Not Allowed");
+  }
 
-  fs.readFile(filePath, (err, content) => {
+  const safePathname = path.normalize(decodeURIComponent(pathname.replace(/\0/g, ""))).replace(/^(\.\.[\/\\])+/, "");
+  const targetFile = safePathname === "/" || safePathname === "" ? "index.html" : safePathname.replace(/^\//, "");
+  const resolvedPath = path.resolve(__dirname, targetFile);
+  const rootDir = path.resolve(__dirname);
+  const baseName = path.basename(resolvedPath).toLowerCase();
+  const ext = path.extname(resolvedPath).toLowerCase();
+
+  // 1. Strict root directory jail (prevent directory traversal out of project)
+  if (!resolvedPath.startsWith(rootDir)) {
+    res.writeHead(403, { "Content-Type": "text/plain", ...SECURITY_HEADERS });
+    return res.end("Forbidden");
+  }
+
+  // 2. Block hidden files (.env, .git, .DS_Store, etc.)
+  if (baseName.startsWith(".")) {
+    res.writeHead(403, { "Content-Type": "text/plain", ...SECURITY_HEADERS });
+    return res.end("Forbidden");
+  }
+
+  // 3. Block sensitive server files & logs from direct browser download
+  const SENSITIVE_BLOCKED_FILES = new Set([
+    "server.js",
+    "package.json",
+    "package-lock.json",
+    "server.log",
+    ".env",
+    ".gitignore",
+    "readme.md",
+  ]);
+  if (SENSITIVE_BLOCKED_FILES.has(baseName)) {
+    res.writeHead(403, { "Content-Type": "text/plain", ...SECURITY_HEADERS });
+    return res.end("Forbidden");
+  }
+
+  // 4. Block arbitrary scripts (only allow client bundle JS)
+  const ALLOWED_JS_FILES = new Set(["script.js", "borrow-lend.js"]);
+  if (ext === ".js" && !ALLOWED_JS_FILES.has(baseName)) {
+    res.writeHead(403, { "Content-Type": "text/plain", ...SECURITY_HEADERS });
+    return res.end("Forbidden");
+  }
+
+  // 5. Allowed MIME extensions
+  const contentType = MIME_TYPES[ext];
+  if (!contentType) {
+    res.writeHead(404, { "Content-Type": "text/plain", ...SECURITY_HEADERS });
+    return res.end("Not Found");
+  }
+
+  fs.readFile(resolvedPath, (err, content) => {
     if (err) {
-      // Fallback to index.html for client routing
-      fs.readFile(path.join(__dirname, "index.html"), (err2, fallback) => {
-        if (err2) {
-          res.writeHead(404, { "Content-Type": "text/plain" });
-          res.end("Not Found");
-        } else {
-          res.writeHead(200, { "Content-Type": "text/html; charset=UTF-8" });
-          res.end(fallback);
+      if (err.code === "ENOENT") {
+        const acceptHeader = req.headers["accept"] || "";
+        if (acceptHeader.includes("text/html")) {
+          fs.readFile(path.join(__dirname, "index.html"), (err2, fallback) => {
+            if (err2) {
+              res.writeHead(404, { "Content-Type": "text/plain", ...SECURITY_HEADERS });
+              return res.end("Not Found");
+            }
+            res.writeHead(200, { "Content-Type": "text/html; charset=UTF-8", ...SECURITY_HEADERS });
+            return res.end(fallback);
+          });
+          return;
         }
-      });
-    } else {
-      res.writeHead(200, { "Content-Type": contentType });
-      res.end(content);
+      }
+      res.writeHead(404, { "Content-Type": "text/plain", ...SECURITY_HEADERS });
+      return res.end("Not Found");
     }
+
+    res.writeHead(200, {
+      "Content-Type": contentType,
+      ...SECURITY_HEADERS,
+      "Cache-Control": ext === ".html" ? "no-cache" : "public, max-age=3600",
+    });
+    res.end(content);
   });
 });
 
-// ─── Start Immediately ───────────────────────────────────
+// ─── Process Exception Handling (Crash Prevention) ───────
+process.on("unhandledRejection", (err) => {
+  console.error("Unhandled Rejection:", err && err.message ? err.message : err);
+});
+process.on("uncaughtException", (err) => {
+  console.error("Uncaught Exception:", err && err.message ? err.message : err);
+});
+
+// ─── Start Server ────────────────────────────────────────
 server.listen(PORT, "0.0.0.0", () => {
-  console.log(`Server listening on port ${PORT}`);
+  console.log(`Server listening securely on port ${PORT}`);
   initDb();
 });

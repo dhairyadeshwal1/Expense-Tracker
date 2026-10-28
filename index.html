@@ -31,7 +31,10 @@
           <h1>Expense Tracker</h1>
         </div>
         <div class="header-meta-row">
-          <span class="company-badge-simple">By Prodtools</span>
+          <a href="https://prodtools.vercel.app/" target="_blank" rel="noopener noreferrer" class="company-badge-simple" title="Visit Prodtools">
+            <span>By Prodtools</span>
+            <span class="badge-arrow" aria-hidden="true">&nearr;</span>
+          </a>
           <span class="header-divider">&middot;</span>
           <p class="subtitle">Private &amp; fast &middot; Storing locally on your device</p>
         </div>
@@ -80,7 +83,7 @@
         <span id="budgetText" class="budget-text">₹0 / ₹0</span>
       </div>
       <div class="budget-input-row">
-        <input type="number" id="budgetInput" placeholder="Set monthly budget (₹)" min="0" />
+        <input type="number" id="budgetInput" placeholder="Set monthly budget (₹)" min="0" step="any" inputmode="decimal" />
         <button id="setBudgetBtn" class="btn btn-budget">Set Budget</button>
       </div>
     </section>
@@ -107,13 +110,13 @@
       <form id="transactionForm">
         <div class="form-group">
           <label for="description">Description</label>
-          <input type="text" id="description" placeholder="e.g. Coffee, Books, Freelance…" required />
+          <input type="text" id="description" placeholder="e.g. Coffee, Books, Freelance…" required inputmode="text" autocapitalize="sentences" autocorrect="on" spellcheck="true" />
         </div>
 
         <div class="form-row">
           <div class="form-group">
             <label for="amount">Amount (₹)</label>
-            <input type="number" id="amount" placeholder="0" min="0.01" step="0.01" required />
+            <input type="number" id="amount" placeholder="0" min="0.01" step="0.01" inputmode="decimal" required />
           </div>
           <div class="form-group">
             <label for="type">Type</label>
@@ -160,7 +163,7 @@
     <section class="card filter-card">
       <h2>Filter & Search</h2>
       <div class="filter-row">
-        <input type="text" id="searchInput" placeholder="Search description…" />
+        <input type="text" id="searchInput" placeholder="Search description…" inputmode="text" autocapitalize="none" autocomplete="off" />
         <select id="filterType">
           <option value="all">All Types</option>
           <option value="income">Income</option>
@@ -236,7 +239,7 @@
   <!-- ───────── Footer ───────── -->
   <footer>
     <p>Expense Tracker &middot; <span id="footerStorageNote">Storing locally on your device</span></p>
-    <p>Made by Dhairya Deshwal &middot; Powered by Prodtools</p>
+    <p>Made by Dhairya Deshwal &middot; Powered by <a href="https://prodtools.vercel.app/" target="_blank" rel="noopener noreferrer" class="footer-link">Prodtools</a></p>
   </footer>
 
   <!-- ───────── AI Financial Assistant Widget ───────── -->
@@ -297,6 +300,8 @@
           id="aiChatInput"
           class="ai-chat-input"
           placeholder="Ask AI, add expense, set budget…"
+          inputmode="text"
+          autocapitalize="sentences"
           autocomplete="off"
         />
         <button type="submit" id="aiSendBtn" class="ai-send-btn" aria-label="Send Message" title="Send">

@@ -31,7 +31,10 @@
           <h1>Borrow &amp; Lend</h1>
         </div>
         <div class="header-meta-row">
-          <span class="company-badge-simple">By Prodtools</span>
+          <a href="https://prodtools.vercel.app/" target="_blank" rel="noopener noreferrer" class="company-badge-simple" title="Visit Prodtools">
+            <span>By Prodtools</span>
+            <span class="badge-arrow" aria-hidden="true">&nearr;</span>
+          </a>
           <span class="header-divider">&middot;</span>
           <p class="subtitle">Track who you owe &amp; who owes you &middot; Storing locally on your device</p>
         </div>
@@ -152,18 +155,18 @@
         <div class="form-row">
           <div class="form-group">
             <label for="personName">Person's Name</label>
-            <input type="text" id="personName" list="contactsDatalist" placeholder="e.g. Rahul, Priya, Landlord…" required autocomplete="off" />
+            <input type="text" id="personName" list="contactsDatalist" placeholder="e.g. Rahul, Priya, Landlord…" required inputmode="text" autocapitalize="words" autocorrect="off" spellcheck="false" autocomplete="off" />
             <datalist id="contactsDatalist"></datalist>
           </div>
           <div class="form-group">
             <label for="dueAmount">Amount (₹)</label>
-            <input type="number" id="dueAmount" placeholder="0" min="0.01" step="0.01" required />
+            <input type="number" id="dueAmount" placeholder="0" min="0.01" step="0.01" inputmode="decimal" required />
           </div>
         </div>
 
         <div class="form-group">
           <label for="dueDescription">Reason / Note</label>
-          <input type="text" id="dueDescription" placeholder="e.g. Dinner bill, Concert ticket, Rent share, Emergency cash…" required />
+          <input type="text" id="dueDescription" placeholder="e.g. Dinner bill, Concert ticket, Rent share, Emergency cash…" required inputmode="text" autocapitalize="sentences" autocorrect="on" spellcheck="true" />
         </div>
 
         <div class="form-row">
@@ -195,7 +198,7 @@
     <section class="card filter-card">
       <h2>Filter &amp; Search Dues</h2>
       <div class="filter-row filter-row-dues">
-        <input type="text" id="searchDuesInput" placeholder="Search person, reason…" />
+        <input type="text" id="searchDuesInput" placeholder="Search person, reason…" inputmode="text" autocapitalize="none" autocomplete="off" />
         <select id="filterDueType">
           <option value="all">All Types</option>
           <option value="lent">Lent (They owe me)</option>
@@ -254,7 +257,7 @@
   <!-- ───────── Footer ───────── -->
   <footer>
     <p>Expense Tracker &middot; Borrow &amp; Lend &middot; <span id="footerStorageNote">Storing locally on your device</span></p>
-    <p>Made by Dhairya Deshwal &middot; Powered by Prodtools</p>
+    <p>Made by Dhairya Deshwal &middot; Powered by <a href="https://prodtools.vercel.app/" target="_blank" rel="noopener noreferrer" class="footer-link">Prodtools</a></p>
   </footer>
 
   <!-- ───────── AI Financial Assistant Widget ───────── -->
@@ -315,6 +318,8 @@
           id="aiChatInput"
           class="ai-chat-input"
           placeholder="Ask who owes you, record lent/borrowed money…"
+          inputmode="text"
+          autocapitalize="sentences"
           autocomplete="off"
         />
         <button type="submit" id="aiSendBtn" class="ai-send-btn" aria-label="Send Message" title="Send">

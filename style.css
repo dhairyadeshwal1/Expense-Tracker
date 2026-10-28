@@ -395,14 +395,36 @@ body.intro-complete footer {
 .company-badge-simple {
   display: inline-flex;
   align-items: center;
+  gap: 0.28rem;
   font-size: 0.74rem;
   font-weight: 600;
   color: var(--tesla-blue);
   background: var(--tesla-blue-wash);
   border: 1px solid rgba(62, 106, 225, 0.22);
-  padding: 0.16rem 0.6rem;
+  padding: 0.16rem 0.65rem;
   border-radius: var(--radius-pill);
   letter-spacing: 0.02em;
+  text-decoration: none;
+  transition: all var(--ease);
+  cursor: pointer;
+}
+
+.company-badge-simple:hover {
+  background: rgba(62, 106, 225, 0.16);
+  border-color: rgba(62, 106, 225, 0.4);
+  color: var(--tesla-blue-hover);
+  transform: translateY(-1px);
+}
+
+.company-badge-simple .badge-arrow {
+  font-size: 0.7rem;
+  transition: transform var(--ease);
+  display: inline-block;
+  line-height: 1;
+}
+
+.company-badge-simple:hover .badge-arrow {
+  transform: translate(1px, -1px);
 }
 
 .header-divider {
@@ -754,6 +776,17 @@ textarea:focus {
   background: #ffffff;
   border-color: var(--tesla-black);
   box-shadow: 0 0 0 1px var(--tesla-black);
+}
+
+/* Clean mobile number inputs */
+input[type="number"]::-webkit-inner-spin-button,
+input[type="number"]::-webkit-outer-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+input[type="number"] {
+  -moz-appearance: textfield;
 }
 
 .form-row {
@@ -1242,6 +1275,20 @@ footer {
   color: var(--tesla-pewter);
   font-size: 12px;
   text-align: center;
+}
+
+footer a,
+.footer-link {
+  color: var(--tesla-graphite);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  font-weight: 550;
+  transition: color var(--ease);
+}
+
+footer a:hover,
+.footer-link:hover {
+  color: var(--tesla-blue);
 }
 
 /* ───────── Responsive Breakpoints ───────── */
